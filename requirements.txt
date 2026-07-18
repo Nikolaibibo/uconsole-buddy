@@ -1,4 +1,4 @@
-bluez-peripheral==0.2.0
+bluez-peripheral>=0.1.7
 dbus-fast>=2.21
 textual>=0.60
 pytest>=8.0
