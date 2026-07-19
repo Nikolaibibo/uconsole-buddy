@@ -13,7 +13,8 @@ def build_snapshot(*, state="idle", total=1, running=0, waiting=0, msg="", promp
 
 
 def build_prompt_snapshot(prompt_id: str, tool: str, hint: str) -> str:
-    return build_snapshot(total=1, running=0, waiting=1, msg=f"approve: {tool}",
+    return build_snapshot(state="waiting", total=1, running=0, waiting=1,
+                          msg=f"approve: {tool}",
                           prompt={"id": prompt_id, "tool": tool, "hint": hint})
 
 
