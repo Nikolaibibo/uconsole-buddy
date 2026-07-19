@@ -9,6 +9,7 @@ from textual.widgets import Static
 from textual.containers import Vertical, Container
 
 from .mood import mood_for, face_box, CLOSED_EYES
+from .i18n import t, word_for
 from .state import AppState
 
 try:
@@ -146,9 +147,9 @@ class CompanionApp(App):
             root.styles.border = ("round", "#ffb300")
             overlay.update(
                 f"[#ffb300]{face_box('waiting')}[/]\n\n"
-                f"[bold #ffb300]{big_word('darf ich')}[/]\n\n"
+                f"[bold #ffb300]{big_word(t('may_i'))}[/]\n\n"
                 f"[grey85]{tool} · {hint}[/]\n\n"
-                f"[bold]\\[Y] klar     \\[N] nö[/]"
+                f"[bold]\\[Y] {t('yes')}     \\[N] {t('no')}[/]"
             )
             overlay.add_class("active")
             stack.display = False
@@ -156,14 +157,14 @@ class CompanionApp(App):
             overlay.remove_class("active")
             stack.display = True
             self.query_one("#face", Static).update(f"[{color}]{self._animated_face(st, m)}[/]")
-            self.query_one("#word", Static).update(f"[bold {color}]{big_word(m['word'])}[/]")
+            self.query_one("#word", Static).update(f"[bold {color}]{big_word(word_for(st))}[/]")
             self.query_one("#anim", Static).update(f"[{color}]{self._accent(st)}[/]")
-            ctx = state.entries[-1] if state.entries else state.msg
+            ctx = state.entries[-1] if state.entries else ""
             self.query_one("#ctx", Static).update(_clip(ctx, 52))
 
         conn = state.connection_state(now)
-        conn_txt = "○ getrennt" if conn == "disconnected" else "● verbunden"
-        mute_txt = "✕ stumm" if getattr(self, "_muted", False) else "♪ Ton an"
+        conn_txt = f"○ {t('disc')}" if conn == "disconnected" else f"● {t('connected')}"
+        mute_txt = f"✕ {t('muted')}" if getattr(self, "_muted", False) else f"♪ {t('sound_on')}"
         self.query_one("#foot", Static).update(f"{conn_txt}     {mute_txt}")
 
     def render_from_state(self, state: AppState, now: float) -> None:
