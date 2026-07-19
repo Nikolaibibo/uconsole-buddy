@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 cd "$HOME/Documents/web/uconsole-companion"
+export GERALD_LANG=de
 source .venv/bin/activate
 while true; do
   # BlueZ frisch: verwaiste GATT-Registrierung (SIGKILL/Crash-Reste) + Controller-Reset (#1)
