@@ -39,3 +39,11 @@ def test_hook_output_shape():
     assert m["hookSpecificOutput"]["hookEventName"] == "PreToolUse"
     assert m["hookSpecificOutput"]["permissionDecision"] == "allow"
     assert m["hookSpecificOutput"]["permissionDecisionReason"] == "ok"
+
+def test_build_snapshot_has_state():
+    m = json.loads(build_snapshot(state="waiting"))
+    assert m["state"] == "waiting"
+
+def test_build_snapshot_default_state_idle():
+    m = json.loads(build_snapshot())
+    assert m["state"] == "idle"
