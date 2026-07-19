@@ -33,3 +33,76 @@ class Bridge:
         fut = self._pending.get(p["id"])
         if fut and not fut.done():
             fut.set_result(decision_to_hook(p["decision"]))
+
+
+# ---- Daemon-Außenschale: Unix-Socket-Server + BLE-Verdrahtung (Task 1.2) ----
+import json, logging, os
+from pathlib import Path
+from .ble_central import BleCentral
+
+APPROVE_TIMEOUT = 100.0
+SOCK = Path(os.path.expanduser("~/Documents/web/uconsole-companion-bridge/.run/bridge.sock"))
+logging.basicConfig(filename="bridge.log", level=logging.INFO, format="%(asctime)s %(message)s")
+log = logging.getLogger("bridge")
+
+
+def _make_handler(bridge: "Bridge"):
+    async def handle(reader, writer):
+        try:
+            raw = await reader.readline()
+            req = json.loads(raw.decode("utf-8"))
+            if req.get("type") == "approve":
+                decision = await bridge.request_approval(
+                    req["id"], req.get("tool", "?"), req.get("hint", ""), APPROVE_TIMEOUT)
+            else:
+                decision = "ask"   # status u.a. (P2) — kein Approval
+            writer.write((json.dumps({"decision": decision}) + "\n").encode("utf-8"))
+            await writer.drain()
+        except Exception as e:
+            log.info("handler error: %s", e)
+            try:
+                writer.write(b'{"decision":"ask"}\n')
+                await writer.drain()
+            except Exception:
+                pass
+        finally:
+            writer.close()
+    return handle
+
+
+async def _serve(bridge: "Bridge"):
+    SOCK.parent.mkdir(parents=True, exist_ok=True)
+    if SOCK.exists():
+        SOCK.unlink()
+    server = await asyncio.start_unix_server(_make_handler(bridge), path=str(SOCK))
+    os.chmod(SOCK, 0o600)
+    log.info("socket listening at %s", SOCK)
+    print(f"socket listening at {SOCK}")
+    async with server:
+        await server.serve_forever()
+
+
+async def _main():
+    bridge_ref: dict = {}
+
+    def on_line(line: str):
+        log.info("BLE< %s", line)
+        if "bridge" in bridge_ref:
+            bridge_ref["bridge"].on_ble_line(line)
+
+    ble = BleCentral(on_line)
+    print("verbinde mit uConsole (NUS) ...")
+    await ble.connect()
+    log.info("BLE connected to uConsole")
+    print("BLE verbunden.")
+    bridge = Bridge(lambda s: ble.send_line(s))
+    bridge_ref["bridge"] = bridge
+    await _serve(bridge)
+
+
+def main():
+    asyncio.run(_main())
+
+
+if __name__ == "__main__":
+    main()
