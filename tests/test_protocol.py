@@ -13,6 +13,7 @@ def test_build_prompt_snapshot():
     assert m["waiting"] == 1
     assert m["prompt"] == {"id": "req1", "tool": "Bash", "hint": "ls /tmp"}
     assert m["msg"] == "approve: Bash"
+    assert m["state"] == "waiting"
 
 def test_build_cleared():
     m = json.loads(build_cleared_snapshot())
