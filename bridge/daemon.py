@@ -1,7 +1,13 @@
 # bridge/daemon.py  (Bridge-Kern; Socket-Server folgt in Task 1.2)
 import asyncio
 from typing import Awaitable, Callable
-from .protocol import build_prompt_snapshot, build_cleared_snapshot, parse_permission, decision_to_hook
+from .protocol import (
+    build_cleared_snapshot,
+    build_prompt_snapshot,
+    build_snapshot,
+    decision_to_hook,
+    parse_permission,
+)
 
 
 class Bridge:
@@ -34,6 +40,14 @@ class Bridge:
         if fut and not fut.done():
             fut.set_result(decision_to_hook(p["decision"]))
 
+    async def push_status(self, state: str, msg: str = "") -> None:
+        """Status-Snapshot pushen (P2) — nur wenn kein Approval-Prompt aktiv ist,
+        damit ein Session/Stop/Notify-Event nie einen laufenden Overlay-Prompt überschreibt."""
+        if self._pending:
+            return
+        await self._send(build_snapshot(
+            total=1, running=1 if state == "running" else 0, waiting=0, msg=msg))
+
 
 # ---- Daemon-Außenschale: Unix-Socket-Server + BLE-Verdrahtung (Task 1.2) ----
 import json, logging, os
@@ -54,8 +68,11 @@ def _make_handler(bridge: "Bridge"):
             if req.get("type") == "approve":
                 decision = await bridge.request_approval(
                     req["id"], req.get("tool", "?"), req.get("hint", ""), APPROVE_TIMEOUT)
+            elif req.get("type") == "status":
+                await bridge.push_status(req.get("state", "idle"), req.get("msg", ""))
+                decision = "ask"   # kein Approval — Antwort wird vom fire-and-forget-Hook ignoriert
             else:
-                decision = "ask"   # status u.a. (P2) — kein Approval
+                decision = "ask"   # unbekannter Typ — kein Approval
             writer.write((json.dumps({"decision": decision}) + "\n").encode("utf-8"))
             await writer.drain()
         except Exception as e:

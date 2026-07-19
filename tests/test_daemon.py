@@ -45,3 +45,25 @@ def test_stale_permission_ignored():
         b.on_ble_line('{"cmd":"permission","id":"OTHER","decision":"once"}')  # falsche id
         return await task
     assert run(scenario()) == "ask"   # nur die falsche id kam → Timeout → ask
+
+
+def test_push_status_sends_when_idle():
+    async def scenario():
+        b, sent = make_bridge()
+        await b.push_status("running", "x")
+        assert any('"running": 1' in s for s in sent)
+        return sent
+    run(scenario())
+
+
+def test_push_status_skips_during_approval():
+    async def scenario():
+        b, sent = make_bridge()
+        task = asyncio.create_task(b.request_approval("r5", "Bash", "x", timeout=5))
+        await asyncio.sleep(0)  # Prompt-Snapshot gesendet, Future pending
+        before = len(sent)
+        await b.push_status("running", "x")
+        assert len(sent) == before  # kein zusätzlicher Status-Snapshot während Approval aktiv
+        b.on_ble_line('{"cmd":"permission","id":"r5","decision":"once"}')  # aufräumen
+        await task
+    run(scenario())
