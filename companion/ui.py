@@ -8,7 +8,7 @@ from textual.app import App, ComposeResult
 from textual.widgets import Static
 from textual.containers import Vertical, Container
 
-from .mood import mood_for, face_box, HEAD_W
+from .mood import mood_for, face_box, CLOSED_EYES
 from .state import AppState
 
 try:
@@ -19,7 +19,6 @@ except Exception:  # pragma: no cover - Fallback wenn pyfiglet fehlt
 
 _FOLD = {"Ä": "AE", "Ö": "OE", "Ü": "UE", "ß": "SS", "ä": "AE", "ö": "OE", "ü": "UE"}
 _SPIN = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"
-_CLOSED_EYES = "─         ─"
 _fig_cache: dict = {}
 
 
@@ -100,16 +99,9 @@ class CompanionApp(App):
 
     # ---- Animations-Bausteine ----
     def _animated_face(self, st: str, m: dict) -> str:
-        eyes = m["eyes"]
         # Blinzeln: kurz die Augen schließen (nicht bei waiting/error — die bleiben wach)
-        if st in ("idle", "thinking", "running", "done") and self._frame % 14 == 0:
-            eyes = _CLOSED_EYES
-        top = "╭" + "─" * HEAD_W + "╮"
-        bot = "╰" + "─" * HEAD_W + "╯"
-        pad = "│" + " " * HEAD_W + "│"
-        e = "│" + eyes.center(HEAD_W) + "│"
-        mo = "│" + m["mouth"].center(HEAD_W) + "│"
-        return "\n".join([top, pad, e, pad, mo, pad, bot])
+        blink = st in ("idle", "thinking", "running", "done") and self._frame % 14 == 0
+        return face_box(st, eyes=CLOSED_EYES if blink else None)
 
     def _accent(self, st: str) -> str:
         f = self._frame
