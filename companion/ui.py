@@ -18,7 +18,6 @@ except Exception:  # pragma: no cover - Fallback wenn pyfiglet fehlt
     _FIG = None
 
 _FOLD = {"Ä": "AE", "Ö": "OE", "Ü": "UE", "ß": "SS", "ä": "AE", "ö": "OE", "ü": "UE"}
-_SPIN = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"
 _fig_cache: dict = {}
 
 
@@ -103,20 +102,24 @@ class CompanionApp(App):
         blink = st in ("idle", "thinking", "running", "done") and self._frame % 14 == 0
         return face_box(st, eyes=CLOSED_EYES if blink else None)
 
+    def _bar(self, width: int = 13, win: int = 3) -> str:
+        """Großer Lauf-Balken: ein gefülltes Fenster wandert durch die Zellen (wrap)."""
+        pos = self._frame % width
+        cells = ["▰" if (i - pos) % width < win else "▱" for i in range(width)]
+        return " ".join(cells)   # gespreizt = optisch groß
+
     def _accent(self, st: str) -> str:
         f = self._frame
-        if st == "running":
-            return _SPIN[f % len(_SPIN)] + " arbeitet"
-        if st == "thinking":
-            return "." * ((f % 3) + 1)
+        if st in ("running", "thinking"):
+            return self._bar()
         if st == "idle":
-            return " ".join(["z"] * ((f // 2) % 3 + 1))
+            return "  ".join(["z"] * ((f // 2) % 3 + 1))
         if st == "waiting":
-            return "!  !" if f % 2 else "   "
+            return "▼  ▼  ▼" if f % 2 else "         "
         if st == "done":
-            return "✓"
+            return "✓ ✓ ✓"
         if st == "error":
-            return "✕"
+            return "✕ ✕ ✕"
         return ""
 
     def _repaint(self) -> None:
