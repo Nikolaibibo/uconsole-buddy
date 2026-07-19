@@ -20,13 +20,20 @@ def feed_line(tool, tool_input, hhmm):
 
 def main():
     try:
-        ev = json.load(sys.stdin)
+        try:
+            ev = json.load(sys.stdin)
+        except Exception:
+            ev = {}
+        if not isinstance(ev, dict):
+            ev = {}
+        tool = ev.get("tool_name", "?")
+        hhmm = datetime.now().strftime("%H:%M")
+        entry = feed_line(tool, ev.get("tool_input", {}), hhmm)
+        send_status(state="running", entry=entry)
+    except SystemExit:
+        raise
     except Exception:
-        ev = {}
-    tool = ev.get("tool_name", "?")
-    hhmm = datetime.now().strftime("%H:%M")
-    entry = feed_line(tool, ev.get("tool_input", {}), hhmm)
-    send_status(state="running", entry=entry)
+        sys.exit(0)
 
 
 if __name__ == "__main__":
