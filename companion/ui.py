@@ -7,10 +7,12 @@ from textual.widgets import Static
 from textual.containers import Vertical
 
 from .state import AppState
+from .mood import mood_for
 
 
 class CompanionApp(App):
     CSS = """
+    #face { padding: 1; text-style: bold; }
     #overlay { display: none; border: heavy $warning; padding: 1; }
     #overlay.active { display: block; }
     #status { padding: 1; }
@@ -30,11 +32,14 @@ class CompanionApp(App):
 
     def compose(self) -> ComposeResult:
         with Vertical():
+            yield Static("", id="face")
             yield Static("", id="status")
             yield Static("", id="overlay")
 
     def render_from_state(self, state: AppState, now: float) -> None:
         self._state = state
+        face, spruch = mood_for(state.mood_state(now))
+        self.query_one("#face", Static).update(f"{face}  {spruch}")
         conn = state.connection_state(now)
         lock = "🔒" if state.secure else ""
         lines = state.entries[:3]

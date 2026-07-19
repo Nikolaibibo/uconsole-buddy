@@ -79,3 +79,17 @@ def test_connection_state_idle_when_empty():
     s = AppState()
     s.apply_snapshot(snap(total=0, running=0, waiting=0), now=100.0)
     assert s.connection_state(now=101.0) == "idle"
+
+
+def test_apply_snapshot_reads_state():
+    s = AppState()
+    s.apply_snapshot({"total": 1, "state": "waiting"}, now=100.0)
+    assert s.claude_state == "waiting"
+    assert s.mood_state(now=100.0) == "waiting"
+
+
+def test_mood_state_falls_back_to_connection_state():
+    s = AppState()
+    s.apply_snapshot({"total": 1, "running": 1}, now=100.0)  # kein state-Feld
+    assert s.claude_state == ""
+    assert s.mood_state(now=100.0) == "running"  # aus connection_state abgeleitet

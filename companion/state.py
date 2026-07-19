@@ -19,6 +19,7 @@ class AppState:
         self.deny = 0
         self.connected = False
         self.secure = False
+        self.claude_state = ""
         # interne State-Machine
         self._last_prompt_id = ""
         self._response_sent = False
@@ -35,6 +36,7 @@ class AppState:
         self.tokens = msg.get("tokens", self.tokens)
         self.tokens_today = msg.get("tokens_today", self.tokens_today)
         self.prompt = msg.get("prompt")  # dict oder None
+        self.claude_state = msg.get("state", "")
         new_id = self.prompt["id"] if self.prompt else ""
         if new_id != self._last_prompt_id:
             self._last_prompt_id = new_id
@@ -69,6 +71,9 @@ class AppState:
         if self.running > 0:
             return "running"
         return "idle"
+
+    def mood_state(self, now: float) -> str:
+        return self.claude_state or self.connection_state(now)
 
     def set_owner(self, name: str) -> None:
         self.owner = name
