@@ -18,6 +18,7 @@ class Bridge:
         self._state = "idle"
         self._msg = "idle"
         self._entries: deque[str] = deque(maxlen=8)
+        self._idle_task = None
 
     async def request_approval(self, req_id: str, tool: str, hint: str, timeout: float) -> str:
         loop = asyncio.get_running_loop()
@@ -55,16 +56,34 @@ class Bridge:
         )
 
     async def push_event(self, state: str | None = None, msg: str | None = None,
-                         entry: str | None = None) -> None:
+                         entry: str | None = None, decay: float = 5.0) -> None:
         if entry:
             self._entries.append(entry)
         if state is not None:
             self._state = state
+            self._cancel_decay()
+            if state == "done":
+                self._idle_task = asyncio.ensure_future(self._decay_to_idle(decay))
         if msg is not None:
             self._msg = msg
         if self._pending:          # aktiver Approval-Overlay hat Vorrang
             return
         await self._send(self._build_state_snapshot())
+
+    def _cancel_decay(self) -> None:
+        if self._idle_task is not None and not self._idle_task.done():
+            self._idle_task.cancel()
+        self._idle_task = None
+
+    async def _decay_to_idle(self, delay: float) -> None:
+        try:
+            await asyncio.sleep(delay)
+        except asyncio.CancelledError:
+            return
+        self._state = "idle"
+        self._msg = "idle"
+        if not self._pending:
+            await self._send(self._build_state_snapshot())
 
     async def push_status(self, state: str, msg: str = "") -> None:
         """Rückwärtskompatibler Wrapper (alte Hooks + Tests)."""

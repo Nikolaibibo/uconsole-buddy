@@ -105,3 +105,22 @@ def test_push_event_skips_send_during_approval_but_keeps_state():
         assert m["state"] == "done"
         assert "hidden" in m["entries"]                 # während Approval gemerkte Zeile ist da
     run(scenario())
+
+
+def test_done_decays_to_idle():
+    async def scenario():
+        b, sent = make_bridge()
+        await b.push_event(state="done", decay=0.05)
+        assert json.loads(sent[-1])["state"] == "done"
+        await asyncio.sleep(0.12)
+        assert json.loads(sent[-1])["state"] == "idle"   # automatisch zerfallen
+    run(scenario())
+
+def test_new_event_cancels_decay():
+    async def scenario():
+        b, sent = make_bridge()
+        await b.push_event(state="done", decay=0.10)
+        await b.push_event(state="running")              # canceled Zerfall
+        await asyncio.sleep(0.15)
+        assert json.loads(sent[-1])["state"] == "running"
+    run(scenario())
