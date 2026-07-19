@@ -49,6 +49,7 @@ class CompanionApp(App):
     CSS = """
     Screen { align: center middle; }
     #root  { width: 100%; height: 100%; border: round #4caf50; align: center middle; }
+    #name  { dock: top; width: 100%; text-align: center; padding: 1 0 0 0; text-style: bold; }
     #stack { height: auto; width: 100%; align: center middle; }
     #face  { width: 100%; text-align: center; }
     #word  { width: 100%; text-align: center; padding: 1 0 0 0; }
@@ -79,6 +80,7 @@ class CompanionApp(App):
 
     def compose(self) -> ComposeResult:
         with Container(id="root"):
+            yield Static("", id="name")
             yield Static("", id="foot")
             with Vertical(id="stack"):
                 yield Static("", id="face")
@@ -133,6 +135,7 @@ class CompanionApp(App):
 
         root = self.query_one("#root", Container)
         root.styles.border = ("round", color)
+        self.query_one("#name", Static).update(f"[{color}]◦ Gerald ◦[/]")
 
         overlay = self.query_one("#overlay", Static)
         stack = self.query_one("#stack", Vertical)
