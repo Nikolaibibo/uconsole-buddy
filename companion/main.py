@@ -1,9 +1,11 @@
 # companion/main.py
 import asyncio
 import logging
+import os
 import time
 
 from .ble_nus import NusPeripheral
+from .notify import NotifyDecider, play
 from .state import AppState
 from .ui import CompanionApp
 from .protocol import parse_message, build_permission, build_ack, build_status_ack
@@ -19,7 +21,9 @@ class Companion:
     def __init__(self) -> None:
         self.state = AppState()
         self.ble = NusPeripheral("Claude-uConsole", self._on_line)
-        self.app = CompanionApp(on_decision=self._on_decision)
+        self.notifier = NotifyDecider()
+        self._assets = os.path.join(os.path.dirname(__file__), "assets")
+        self.app = CompanionApp(on_decision=self._on_decision, on_mute=self._toggle_mute)
         self._send_q: asyncio.Queue[str] = asyncio.Queue()
 
     # ---- RX ----
@@ -29,7 +33,11 @@ class Companion:
         if msg is None:
             return
         if "total" in msg:                      # Heartbeat-Snapshot
-            self.state.apply_snapshot(msg, now=time.monotonic())
+            now = time.monotonic()
+            self.state.apply_snapshot(msg, now=now)
+            channel = self.notifier.decide(self.state.mood_state(now), now)
+            if channel:
+                play(channel, self._assets)
             self._rerender()
         elif msg.get("evt") == "turn":
             pass                                # nicht kritisch
@@ -62,6 +70,11 @@ class Companion:
 
     def _rerender(self) -> None:
         self.app.render_from_state(self.state, now=time.monotonic())
+
+    def _toggle_mute(self) -> None:
+        self.notifier.muted = not self.notifier.muted
+        self.app._muted = self.notifier.muted
+        self._rerender()
 
     # ---- Loops ----
     async def _tx_loop(self) -> None:

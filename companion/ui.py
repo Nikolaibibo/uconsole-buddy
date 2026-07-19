@@ -22,12 +22,14 @@ class CompanionApp(App):
         ("enter", "approve", "erlauben"),
         ("n", "deny", "ablehnen"),
         ("escape", "deny", "ablehnen"),
+        ("m", "mute", "stumm"),
         ("q", "quit", "beenden"),
     ]
 
-    def __init__(self, on_decision: Callable[[str], None]):
+    def __init__(self, on_decision: Callable[[str], None], on_mute=None):
         super().__init__()
         self._on_decision = on_decision
+        self._on_mute = on_mute
         self._state: AppState | None = None
 
     def compose(self) -> ComposeResult:
@@ -50,6 +52,7 @@ class CompanionApp(App):
             f"— letzte Zeilen —\n" + "\n".join(lines) + "\n"
             f"session {state.tokens/1000:.1f}k  today {state.tokens_today/1000:.1f}k  "
             f"✓{state.appr} ✗{state.deny}"
+            f"{' 🔇' if getattr(self, '_muted', False) else ''}"
         )
         self.query_one("#status", Static).update(body)
 
@@ -70,3 +73,7 @@ class CompanionApp(App):
     def action_deny(self) -> None:
         if self._state and self._state.in_prompt():
             self._on_decision("deny")
+
+    def action_mute(self) -> None:
+        if self._on_mute:
+            self._on_mute()
