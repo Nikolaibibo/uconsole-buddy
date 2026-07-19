@@ -30,6 +30,14 @@ class BleCentral:
         self._reconnect_task: asyncio.Task | None = None
 
     async def connect(self) -> None:
+        # Alten Client sauber loslassen, sonst hält macOS/CoreBluetooth ein stale Handle,
+        # das den Reconnect in einen TimeoutError laufen lässt.
+        if self._client is not None:
+            try:
+                await self._client.disconnect()
+            except Exception:
+                pass
+            self._client = None
         dev = await BleakScanner.find_device_by_filter(
             lambda d, ad: NUS_SERVICE.lower() in [u.lower() for u in (ad.service_uuids or [])],
             timeout=15.0)
@@ -44,14 +52,19 @@ class BleCentral:
         for line in self._reasm.feed(bytes(data)):
             self._on_line(line)
 
-    def _on_disc(self, _client: BleakClient) -> None:
-        """bleak-Callback bei ungeplantem Verbindungsverlust. Synchron — keine awaits hier."""
+    def _trigger_reconnect(self) -> None:
+        """Als getrennt markieren + Reconnect-Loop starten (idempotent). Von _on_disc UND
+        vom Send-Fehler-Pfad genutzt — falls bleaks disconnected_callback mal nicht feuert."""
         self._connected = False
-        log.info("BLE disconnected")
         if self._on_disconnect is not None:
             self._on_disconnect()
         if self._reconnect_task is None or self._reconnect_task.done():
             self._reconnect_task = asyncio.ensure_future(self._reconnect_loop())
+
+    def _on_disc(self, _client: BleakClient) -> None:
+        """bleak-Callback bei ungeplantem Verbindungsverlust. Synchron — keine awaits hier."""
+        log.info("BLE disconnected")
+        self._trigger_reconnect()
 
     async def _reconnect_loop(self) -> None:
         attempt = 0
@@ -67,12 +80,19 @@ class BleCentral:
                 attempt += 1
 
     async def send_line(self, line: str) -> None:
-        assert self._client is not None
+        if self._client is None or not self._connected:
+            return  # nicht verbunden — Reconnect läuft; Snapshot verwerfen statt crashen
         data = line.encode("utf-8")
         mtu = getattr(self._client, "mtu_size", 23) or 23
-        for chunk in chunk_for_mtu(data, mtu):
-            await self._client.write_gatt_char(NUS_RX, chunk, response=False)
-            await asyncio.sleep(0.01)
+        try:
+            for chunk in chunk_for_mtu(data, mtu):
+                await self._client.write_gatt_char(NUS_RX, chunk, response=False)
+                await asyncio.sleep(0.01)
+        except Exception as e:
+            # Toter Link: Send scheitert oft, BEVOR bleaks disconnected_callback feuert.
+            # Selbst als Disconnect behandeln → Reconnect-Loop anwerfen.
+            log.info("send failed (%s) — treating as disconnect", e)
+            self._trigger_reconnect()
 
     async def disconnect(self) -> None:
         if self._reconnect_task is not None:

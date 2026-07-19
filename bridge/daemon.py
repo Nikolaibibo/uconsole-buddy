@@ -167,7 +167,14 @@ async def _main():
 
     ble = BleCentral(on_line, on_disconnect=on_disconnect)
     print("verbinde mit uConsole (NUS) ...")
-    await ble.connect()
+    while True:
+        try:
+            await ble.connect()
+            break
+        except Exception as e:
+            log.info("initial connect failed: %s — retry in 5s", e)
+            print(f"connect fehlgeschlagen ({e}); retry in 5s ...")
+            await asyncio.sleep(5)
     log.info("BLE connected to uConsole")
     print("BLE verbunden.")
     bridge = Bridge(lambda s: ble.send_line(s))
