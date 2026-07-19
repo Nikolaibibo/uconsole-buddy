@@ -117,7 +117,9 @@ def _make_handler(bridge: "Bridge"):
                 decision = await bridge.request_approval(
                     req["id"], req.get("tool", "?"), req.get("hint", ""), APPROVE_TIMEOUT)
             elif req.get("type") == "status":
-                await bridge.push_status(req.get("state", "idle"), req.get("msg", ""))
+                await bridge.push_event(state=req.get("state"),
+                                        msg=req.get("msg") if "msg" in req else None,
+                                        entry=req.get("entry"))
                 decision = "ask"   # kein Approval — Antwort wird vom fire-and-forget-Hook ignoriert
             else:
                 decision = "ask"   # unbekannter Typ — kein Approval

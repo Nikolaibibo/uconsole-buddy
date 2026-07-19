@@ -1,16 +1,25 @@
 {
   "hooks": {
     "PreToolUse": [
-      {
-        "matcher": "Bash",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "/Users/nikolaibockholt/Documents/web/uconsole-companion-bridge/bridge/hooks/pretooluse.py",
-            "timeout": 120
-          }
-        ]
-      }
+      { "matcher": "Bash", "hooks": [ { "type": "command", "command": "/Users/nikolaibockholt/Documents/web/uconsole-companion-bridge/bridge/hooks/pretooluse.py", "timeout": 120 } ] }
+    ],
+    "PostToolUse": [
+      { "matcher": "*", "hooks": [ { "type": "command", "command": "/Users/nikolaibockholt/Documents/web/uconsole-companion-bridge/bridge/hooks/posttooluse.py", "timeout": 10 } ] }
+    ],
+    "UserPromptSubmit": [
+      { "hooks": [ { "type": "command", "command": "/Users/nikolaibockholt/Documents/web/uconsole-companion-bridge/bridge/hooks/userprompt.py", "timeout": 10 } ] }
+    ],
+    "SessionStart": [
+      { "hooks": [ { "type": "command", "command": "/Users/nikolaibockholt/Documents/web/uconsole-companion-bridge/bridge/hooks/session.py", "timeout": 10 } ] }
+    ],
+    "Notification": [
+      { "hooks": [ { "type": "command", "command": "/Users/nikolaibockholt/Documents/web/uconsole-companion-bridge/bridge/hooks/notify.py", "timeout": 10 } ] }
+    ],
+    "Stop": [
+      { "hooks": [ { "type": "command", "command": "/Users/nikolaibockholt/Documents/web/uconsole-companion-bridge/bridge/hooks/stop.py", "timeout": 10 } ] }
+    ],
+    "SessionEnd": [
+      { "hooks": [ { "type": "command", "command": "/Users/nikolaibockholt/Documents/web/uconsole-companion-bridge/bridge/hooks/sessionend.py", "timeout": 10 } ] }
     ]
   }
 }
