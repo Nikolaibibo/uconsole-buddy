@@ -1,5 +1,6 @@
 # bridge/daemon.py  (Bridge-Kern; Socket-Server folgt in Task 1.2)
 import asyncio
+from collections import deque
 from typing import Awaitable, Callable
 from .protocol import (
     build_cleared_snapshot,
@@ -14,6 +15,9 @@ class Bridge:
     def __init__(self, send_snapshot: Callable[[str], Awaitable[None]]):
         self._send = send_snapshot
         self._pending: dict[str, asyncio.Future] = {}
+        self._state = "idle"
+        self._msg = "idle"
+        self._entries: deque[str] = deque(maxlen=8)
 
     async def request_approval(self, req_id: str, tool: str, hint: str, timeout: float) -> str:
         loop = asyncio.get_running_loop()
@@ -40,13 +44,31 @@ class Bridge:
         if fut and not fut.done():
             fut.set_result(decision_to_hook(p["decision"]))
 
-    async def push_status(self, state: str, msg: str = "") -> None:
-        """Status-Snapshot pushen (P2) — nur wenn kein Approval-Prompt aktiv ist,
-        damit ein Session/Stop/Notify-Event nie einen laufenden Overlay-Prompt überschreibt."""
-        if self._pending:
+    def _build_state_snapshot(self) -> str:
+        return build_snapshot(
+            state=self._state,
+            total=1,
+            running=1 if self._state in ("running", "thinking") else 0,
+            waiting=1 if self._state == "waiting" else 0,
+            msg=self._msg,
+            entries=list(self._entries),
+        )
+
+    async def push_event(self, state: str | None = None, msg: str | None = None,
+                         entry: str | None = None) -> None:
+        if entry:
+            self._entries.append(entry)
+        if state is not None:
+            self._state = state
+        if msg is not None:
+            self._msg = msg
+        if self._pending:          # aktiver Approval-Overlay hat Vorrang
             return
-        await self._send(build_snapshot(
-            total=1, running=1 if state == "running" else 0, waiting=0, msg=msg))
+        await self._send(self._build_state_snapshot())
+
+    async def push_status(self, state: str, msg: str = "") -> None:
+        """Rückwärtskompatibler Wrapper (alte Hooks + Tests)."""
+        await self.push_event(state=state, msg=msg)
 
     def fail_pending(self) -> None:
         """Bei BLE-Disconnect: alle offenen Approvals fail-safe auf 'ask' auflösen (P3)."""

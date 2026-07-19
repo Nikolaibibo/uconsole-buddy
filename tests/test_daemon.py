@@ -67,3 +67,41 @@ def test_push_status_skips_during_approval():
         b.on_ble_line('{"cmd":"permission","id":"r5","decision":"once"}')  # aufräumen
         await task
     run(scenario())
+
+
+import json
+
+def test_push_event_sets_state_and_entry():
+    async def scenario():
+        b, sent = make_bridge()
+        await b.push_event(state="running", msg="arbeite", entry="14:23 Bash: ls")
+        m = json.loads(sent[-1])
+        assert m["state"] == "running"
+        assert m["entries"] == ["14:23 Bash: ls"]
+        assert m["msg"] == "arbeite"
+    run(scenario())
+
+def test_push_event_entries_ring_keeps_last_8():
+    async def scenario():
+        b, sent = make_bridge()
+        for i in range(10):
+            await b.push_event(state="running", entry=f"e{i}")
+        m = json.loads(sent[-1])
+        assert m["entries"] == [f"e{i}" for i in range(2, 10)]  # nur letzte 8
+    run(scenario())
+
+def test_push_event_skips_send_during_approval_but_keeps_state():
+    async def scenario():
+        b, sent = make_bridge()
+        task = asyncio.create_task(b.request_approval("rA", "Bash", "x", timeout=5))
+        await asyncio.sleep(0)
+        before = len(sent)
+        await b.push_event(state="running", entry="hidden")
+        assert len(sent) == before                      # kein Push während Approval
+        b.on_ble_line('{"cmd":"permission","id":"rA","decision":"once"}')
+        await task
+        await b.push_event(state="done")                # jetzt frei
+        m = json.loads(sent[-1])
+        assert m["state"] == "done"
+        assert "hidden" in m["entries"]                 # während Approval gemerkte Zeile ist da
+    run(scenario())
