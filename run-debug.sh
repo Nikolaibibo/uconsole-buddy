@@ -1,11 +1,13 @@
 #!/usr/bin/env bash
 cd "$HOME/Documents/web/uconsole-companion"
-# BlueZ komplett frisch machen: entfernt verwaiste GATT-Registrierungen (SIGKILL-Reste)
-# UND resettet den Controller — das ist, was bisher nur ein Reboot löste (#1).
-sudo systemctl restart bluetooth 2>/dev/null
-sleep 4
 source .venv/bin/activate
-python -m companion.main
-echo
-echo "[companion beendet — Enter zum Schliessen]"
-read
+while true; do
+  # BlueZ frisch: verwaiste GATT-Registrierung (SIGKILL/Crash-Reste) + Controller-Reset (#1)
+  sudo systemctl restart bluetooth 2>/dev/null
+  sleep 4
+  python -m companion.main
+  code=$?
+  [ "$code" -eq 0 ] && break        # sauberes Quit (q) -> nicht neu starten
+  echo "[companion crash (exit $code) - Neustart in 3s]"
+  sleep 3
+done
