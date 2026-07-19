@@ -48,6 +48,13 @@ class Bridge:
         await self._send(build_snapshot(
             total=1, running=1 if state == "running" else 0, waiting=0, msg=msg))
 
+    def fail_pending(self) -> None:
+        """Bei BLE-Disconnect: alle offenen Approvals fail-safe auf 'ask' auflösen (P3)."""
+        for fut in self._pending.values():
+            if not fut.done():
+                fut.set_result("ask")
+        self._pending.clear()
+
 
 # ---- Daemon-Außenschale: Unix-Socket-Server + BLE-Verdrahtung (Task 1.2) ----
 import json, logging, os
@@ -100,6 +107,9 @@ async def _serve(bridge: "Bridge"):
 
 
 async def _main():
+    # bridge und ble referenzieren sich gegenseitig (ble braucht bridge.fail_pending als
+    # on_disconnect-Callback, bridge braucht ble.send_line als send_snapshot). Auflösung über
+    # dasselbe bridge_ref-Indirektions-Pattern, das on_line schon fuer on_ble_line nutzt.
     bridge_ref: dict = {}
 
     def on_line(line: str):
@@ -107,7 +117,12 @@ async def _main():
         if "bridge" in bridge_ref:
             bridge_ref["bridge"].on_ble_line(line)
 
-    ble = BleCentral(on_line)
+    def on_disconnect():
+        log.info("BLE disconnected — failing pending approvals")
+        if "bridge" in bridge_ref:
+            bridge_ref["bridge"].fail_pending()
+
+    ble = BleCentral(on_line, on_disconnect=on_disconnect)
     print("verbinde mit uConsole (NUS) ...")
     await ble.connect()
     log.info("BLE connected to uConsole")
