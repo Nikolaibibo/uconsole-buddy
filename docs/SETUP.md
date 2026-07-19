@@ -134,6 +134,20 @@ These live under `~/.config` on the device, not in this repo.
 
 ---
 
+## Language
+
+The device UI is localized (English + German). Pick the language with the `GERALD_LANG`
+environment variable, read once at startup:
+
+```bash
+GERALD_LANG=en .venv/bin/python -m companion.main   # English (default)
+GERALD_LANG=de .venv/bin/python -m companion.main   # German
+```
+
+Default is `en`. The kiosk wrapper (`device/run-debug.sh`) exports a fixed value for the
+appliance — change that line to switch your device permanently. Strings live in
+`device/companion/i18n.py`; add a language by adding a block to `_STRINGS`.
+
 ## Troubleshooting
 
 - **Only one BLE central at a time.** The device firmware holds a single connection. Disconnect

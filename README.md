@@ -27,6 +27,7 @@ It started as a client for Anthropic's official **Hardware Buddy** (BLE) referen
 - **Sound notifications** — a bright chime when Claude needs you (`waiting`), a soft tone when it's `done`, a distinct tone on `error`. Mute with `m`.
 - **Physical approvals** — a `Bash` command awaiting permission takes over the screen; press `Y`/`N` on the device to allow/deny the real session.
 - **Full-screen kiosk** with a mood-coloured border and small animations (blinking, running bar, drifting `z z z`).
+- **Multilingual** — English (default) and German UI, switch with the `GERALD_LANG` env var.
 
 ## How it works
 
