@@ -3,16 +3,16 @@
 # Pro Zustand: Augen + Mund (im Kopf zentriert), Status-Wort, Farbe, kleiner Hinweis.
 # Augen mit weitem Abstand, damit das große Gesicht Präsenz hat.
 _FACES = {
-    "idle":         {"eyes": "─         ─", "mouth": " ‿ ", "word": "schläft",      "color": "grey50",  "hint": "z z z"},
+    "idle":         {"eyes": "─         ─", "mouth": " ‿ ", "word": "schläft",      "color": "#8a8a8a", "hint": "z z z"},
     "thinking":     {"eyes": "◔         ◔", "mouth": " ~ ", "word": "denke nach",   "color": "#5aa9e6", "hint": "?"},
     "running":      {"eyes": "●         ●", "mouth": "◡ ◡", "word": "arbeite",      "color": "#4caf50", "hint": ""},
     "waiting":      {"eyes": "◕         ◕", "mouth": " O ", "word": "brauch dich!", "color": "#ffb300", "hint": ""},
     "done":         {"eyes": "^         ^", "mouth": "‿ ‿", "word": "fertig!",      "color": "#8bc34a", "hint": ""},
     "error":        {"eyes": "×         ×", "mouth": " o ", "word": "autsch",       "color": "#e53935", "hint": "!"},
-    "offline":      {"eyes": "·         ·", "mouth": " ⁀ ", "word": "offline",      "color": "grey37",  "hint": ""},
-    "disconnected": {"eyes": "·         ·", "mouth": " ⁀ ", "word": "offline",      "color": "grey37",  "hint": ""},
+    "offline":      {"eyes": "·         ·", "mouth": " ⁀ ", "word": "offline",      "color": "#6b6b6b", "hint": ""},
+    "disconnected": {"eyes": "·         ·", "mouth": " ⁀ ", "word": "offline",      "color": "#6b6b6b", "hint": ""},
 }
-_FALLBACK = {"eyes": "·         ·", "mouth": " . ", "word": "…", "color": "grey50", "hint": ""}
+_FALLBACK = {"eyes": "·         ·", "mouth": " . ", "word": "…", "color": "#8a8a8a", "hint": ""}
 
 HEAD_W = 17  # innere Breite des Kopfes
 

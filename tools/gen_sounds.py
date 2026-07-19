@@ -5,13 +5,13 @@ OUT = os.path.join(os.path.dirname(__file__), "..", "companion", "assets")
 RATE = 22050
 
 
-def tone(path, freqs, dur=0.18, vol=0.4):
+def tone(path, freqs, dur, vol):
     os.makedirs(os.path.dirname(path), exist_ok=True)
-    frames = bytearray()
     per = int(RATE * dur)
+    frames = bytearray()
     for f in freqs:                       # Sequenz kurzer Töne = Chime
         for i in range(per):
-            env = min(1.0, i / 400) * min(1.0, (per - i) / 400)   # weiche Flanken
+            env = min(1.0, i / 500) * min(1.0, (per - i) / 500)   # weiche Flanken
             s = int(vol * env * 32767 * math.sin(2 * math.pi * f * i / RATE))
             frames += struct.pack("<h", s)
     with wave.open(path, "w") as w:
@@ -20,7 +20,7 @@ def tone(path, freqs, dur=0.18, vol=0.4):
 
 
 if __name__ == "__main__":
-    tone(os.path.join(OUT, "waiting.wav"), [880, 1175])   # deutlicher Zwei-Ton-Chime
-    tone(os.path.join(OUT, "done.wav"), [660], dur=0.15, vol=0.25)  # sanft
-    tone(os.path.join(OUT, "error.wav"), [300, 220], dur=0.14)      # tiefer Fehlerton
+    tone(os.path.join(OUT, "waiting.wav"), [880, 1320, 1760], 0.16, 0.75)   # heller aufsteigender 3-Ton-Chime
+    tone(os.path.join(OUT, "done.wav"), [988, 659], 0.18, 0.5)              # sanft absteigend
+    tone(os.path.join(OUT, "error.wav"), [330, 247, 165], 0.15, 0.7)        # tiefer 3-Ton-Fehler
     print("wrote waiting.wav done.wav error.wav")
