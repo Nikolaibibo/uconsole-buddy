@@ -1,22 +1,38 @@
 # companion/ui.py
-"""Textual-Fenster-App: Status-Panels + Freigabe-Overlay. Layout aus Spec §7."""
-from typing import Callable
+"""Big-Buddy-Vollbild: großes gezeichnetes Gesicht + Status-Wort, minimaler Kontext.
+Approval-Overlay im selben Buddy-Stil. Layout-Richtung: Charakter über Info."""
+from typing import Callable, Optional
 
 from textual.app import App, ComposeResult
 from textual.widgets import Static
 from textual.containers import Vertical
 
+from .mood import mood_for, face_box
 from .state import AppState
-from .mood import mood_for
+
+
+def _spaced(word: str) -> str:
+    """Status-Wort 'groß' setzen durch Buchstaben-Spreizung."""
+    return " ".join(word.upper())
+
+
+def _clip(s: str, n: int) -> str:
+    s = (s or "").replace("\n", " ").strip()
+    return s if len(s) <= n else s[: n - 1] + "…"
 
 
 class CompanionApp(App):
     CSS = """
-    #face { padding: 1; text-style: bold; }
-    #overlay { display: none; border: heavy $warning; padding: 1; }
-    #overlay.active { display: block; }
-    #status { padding: 1; }
+    Screen { align: center middle; }
+    #stack { height: auto; width: 100%; align: center middle; }
+    #face  { width: 100%; text-align: center; }
+    #word  { width: 100%; text-align: center; text-style: bold; padding: 1 0 0 0; }
+    #ctx   { width: 100%; text-align: center; color: #9e9e9e; padding: 1 0 0 0; }
+    #foot  { dock: bottom; width: 100%; text-align: center; color: #6b6b6b; }
+    #overlay { display: none; }
+    #overlay.active { display: block; width: 100%; height: 100%; align: center middle; }
     """
+
     BINDINGS = [
         ("y", "approve", "erlauben"),
         ("enter", "approve", "erlauben"),
@@ -26,45 +42,59 @@ class CompanionApp(App):
         ("q", "quit", "beenden"),
     ]
 
-    def __init__(self, on_decision: Callable[[str], None], on_mute=None):
+    def __init__(self, on_decision: Callable[[str], None],
+                 on_mute: Optional[Callable[[], None]] = None):
         super().__init__()
         self._on_decision = on_decision
         self._on_mute = on_mute
-        self._state: AppState | None = None
+        self._state: Optional[AppState] = None
+        self._muted = False
 
     def compose(self) -> ComposeResult:
-        with Vertical():
+        yield Static("", id="foot")
+        with Vertical(id="stack"):
             yield Static("", id="face")
-            yield Static("", id="status")
-            yield Static("", id="overlay")
+            yield Static("", id="word")
+            yield Static("", id="ctx")
+        yield Static("", id="overlay")
 
     def render_from_state(self, state: AppState, now: float) -> None:
         self._state = state
-        face, spruch = mood_for(state.mood_state(now))
-        self.query_one("#face", Static).update(f"{face}  {spruch}")
-        conn = state.connection_state(now)
-        lock = "🔒" if state.secure else ""
-        lines = state.entries[:3]
-        body = (
-            f"● {conn} {lock}   Owner: {state.owner or '—'}\n"
-            f"Sessions: total {state.total}  running {state.running}  waiting {state.waiting}\n"
-            f"» {state.msg}\n"
-            f"— letzte Zeilen —\n" + "\n".join(lines) + "\n"
-            f"session {state.tokens/1000:.1f}k  today {state.tokens_today/1000:.1f}k  "
-            f"✓{state.appr} ✗{state.deny}"
-            f"{' 🔇' if getattr(self, '_muted', False) else ''}"
-        )
-        self.query_one("#status", Static).update(body)
+        st = state.mood_state(now)
+        m = mood_for(st)
+        color = m["color"]
 
         overlay = self.query_one("#overlay", Static)
+        stack = self.query_one("#stack", Vertical)
+
         if state.in_prompt() and state.prompt:
+            # Approval hat Vorrang: erwartungsvolles Gesicht nimmt den Screen über
+            tool = state.prompt.get("tool", "")
+            hint = _clip(state.prompt.get("hint", ""), 46)
+            box = face_box("waiting")
             overlay.update(
-                f"⚠ FREIGABE\nTool: {state.prompt.get('tool','')}\n"
-                f"{state.prompt.get('hint','')}\n\n[Y] einmal erlauben   [N] ablehnen"
+                f"[#ffb300]{box}[/]\n\n"
+                f"[bold #ffb300]{_spaced('darf ich?')}[/]\n\n"
+                f"[grey85]{tool} · {hint}[/]\n\n"
+                f"[bold]\\[Y] klar     \\[N] nö[/]"
             )
             overlay.add_class("active")
+            stack.display = False
         else:
             overlay.remove_class("active")
+            stack.display = True
+            self.query_one("#face", Static).update(f"[{color}]{face_box(st)}[/]")
+            word = _spaced(m["word"])
+            if m.get("hint"):
+                word = f"{word}    [{color}]{m['hint']}[/]"
+            self.query_one("#word", Static).update(f"[bold {color}]{word}[/]")
+            ctx = state.entries[-1] if state.entries else state.msg
+            self.query_one("#ctx", Static).update(_clip(ctx, 52))
+
+        conn = state.connection_state(now)
+        conn_txt = "○ getrennt" if conn == "disconnected" else "● verbunden"
+        mute_txt = "✕ stumm" if getattr(self, "_muted", False) else "♪ Ton an"
+        self.query_one("#foot", Static).update(f"{conn_txt}     {mute_txt}")
 
     def action_approve(self) -> None:
         if self._state and self._state.in_prompt():
