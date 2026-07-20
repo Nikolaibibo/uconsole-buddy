@@ -28,6 +28,7 @@ It started as a client for Anthropic's official **Hardware Buddy** (BLE) referen
 - **Physical approvals** — a `Bash` command awaiting permission takes over the screen; press `Y`/`N` on the device to allow/deny the real session.
 - **Full-screen kiosk** with a mood-coloured border and small animations (blinking, running bar, drifting `z z z`).
 - **Multilingual** — English (default) and German UI, switch with the `GERALD_LANG` env var.
+- **Session HUD** — model, context-window fill and usage limits (5h/7d + reset countdown) from the Claude Code statusline, mirrored on the device.
 
 ## How it works
 
