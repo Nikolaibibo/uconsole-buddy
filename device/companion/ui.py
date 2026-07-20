@@ -11,6 +11,7 @@ from textual.containers import Vertical, Container
 from .mood import mood_for, face_box, CLOSED_EYES
 from .i18n import t, word_for
 from .state import AppState
+from .hud import hud_line
 
 try:
     from pyfiglet import Figlet
@@ -56,6 +57,7 @@ class CompanionApp(App):
     #word  { width: 100%; text-align: center; padding: 1 0 0 0; }
     #anim  { width: 100%; text-align: center; }
     #ctx   { width: 100%; text-align: center; color: #9e9e9e; padding: 1 0 0 0; }
+    #hud   { width: 100%; text-align: center; padding: 1 0 0 0; }
     #foot  { dock: bottom; width: 100%; text-align: center; color: #6b6b6b; }
     #overlay { display: none; }
     #overlay.active { display: block; width: 100%; height: 100%; align: center middle; }
@@ -88,6 +90,7 @@ class CompanionApp(App):
                 yield Static("", id="word")
                 yield Static("", id="anim")
                 yield Static("", id="ctx")
+                yield Static("", id="hud")
             yield Static("", id="overlay")
 
     def on_mount(self) -> None:
@@ -161,6 +164,7 @@ class CompanionApp(App):
             self.query_one("#anim", Static).update(f"[{color}]{self._accent(st)}[/]")
             ctx = state.entries[-1] if state.entries else ""
             self.query_one("#ctx", Static).update(_clip(ctx, 52))
+            self.query_one("#hud", Static).update(hud_line(self._state.hud))
 
         conn = state.connection_state(now)
         conn_txt = f"○ {t('disc')}" if conn == "disconnected" else f"● {t('connected')}"
