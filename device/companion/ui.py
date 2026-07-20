@@ -34,7 +34,11 @@ def big_word(word: str) -> str:
     token = _ascii(word).upper().replace("!", "").strip()
     if token in _fig_cache:
         return _fig_cache[token]
-    if _FIG is None:
+    if not token.isascii():
+        # figlet fonts are ASCII-only; render non-Latin (e.g. Hangul) as plain
+        # text — relies on the terminal font having the glyphs.
+        art = word.strip()
+    elif _FIG is None:
         art = " ".join(token)
     else:
         art = "\n".join(l.rstrip() for l in _FIG.renderText(token).splitlines() if l.strip())
