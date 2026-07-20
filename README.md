@@ -42,11 +42,13 @@ Claude Code (hooks)                      Mac / Linux              uConsole (BLE 
 
 Claude Code hooks fire on session events and send a tiny JSON line to the daemon's unix socket (fire-and-forget). The daemon holds one BLE connection to the device and pushes JSON snapshots (`state`, rolling `entries`, …) over **Nordic UART (NUS)**, one JSON object per line — the same protocol as [`anthropics/claude-desktop-buddy`](https://github.com/anthropics/claude-desktop-buddy). `PreToolUse(Bash)` round-trips: the device sends back a `permission` (`once`/`deny`) that becomes the hook's `allow`/`deny`.
 
+**GJC / pi too.** The same daemon and device also drive [GJC (Gajae Code)](https://github.com/gajae-code) / `pi` sessions via a single extension (`bridge/gjc/uconsole-buddy.ts`) that speaks the identical socket protocol — no daemon or device changes. See [`bridge/gjc/README.md`](bridge/gjc/README.md).
+
 ## Repo layout
 
 | Path | What |
 |------|------|
-| **`bridge/`** | Mac/Linux side: Claude Code hook scripts + the BLE daemon (central). |
+| **`bridge/`** | Host side: BLE daemon (central) + Claude Code hook scripts + the GJC/pi extension (`bridge/gjc/`). |
 | **`device/`** | uConsole side: the Textual kiosk UI + BLE peripheral. |
 | **`docs/`** | `SETUP.md` (getting started) + the original German design specs & plans. |
 

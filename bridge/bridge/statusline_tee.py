@@ -13,7 +13,16 @@ import subprocess
 import sys
 import time
 
-SOCK = os.path.expanduser("~/Documents/web/uconsole-companion-bridge/.run/bridge.sock")
+def _socket_path():
+    env = os.environ.get("UCONSOLE_BRIDGE_SOCK")
+    if env:
+        return os.path.expanduser(env)
+    home = os.environ.get("UCONSOLE_BRIDGE_HOME")
+    base = os.path.expanduser(home) if home else os.path.expanduser("~/.uconsole-buddy")
+    return os.path.join(base, "run", "bridge.sock")
+
+
+SOCK = _socket_path()
 USAGE_CACHE = os.path.expanduser("~/.claude/plugins/claude-hud/.usage-cache.json")
 STATE_FILE = "/tmp/gerald-hud-state.json"
 HEARTBEAT_S = 30.0

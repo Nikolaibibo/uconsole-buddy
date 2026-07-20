@@ -2,7 +2,7 @@
 # bridge/hooks/pretooluse.py — dünn, zustandslos, fail-safe ask
 import json, os, socket, sys
 
-SOCK = os.path.expanduser("~/Documents/web/uconsole-companion-bridge/.run/bridge.sock")
+from _send import SOCK
 HINT_MAX = 120
 
 

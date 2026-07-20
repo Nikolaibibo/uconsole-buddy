@@ -5,9 +5,12 @@ Get Gerald running end to end. Two machines are involved:
 - **Device** — the BLE peripheral that shows the face (a uConsole / Raspberry Pi CM4, or any Linux box with BlueZ). Code in `device/`.
 - **Bridge host** — where you run Claude Code (macOS or Linux). Runs the BLE daemon + the hook scripts. Code in `bridge/`.
 
-> ⚠️ **Paths are hardcoded.** Several files pin the author's home path
-> (`/Users/nikolaibockholt/Documents/web/uconsole-companion-bridge/…`). Before anything
-> works on your machine, fix them (see [Adjust the paths](#adjust-the-paths)).
+> ℹ️ **Socket path is configurable.** The daemon, hooks and the GJC extension
+> default to `~/.uconsole-buddy/run/bridge.sock` and all agree out of the box.
+> Override with `UCONSOLE_BRIDGE_SOCK` (or `UCONSOLE_BRIDGE_HOME`) if you want a
+> different location — set it once, no source edits needed. Only the Claude
+> `settings-snippet.json` still needs real absolute hook paths (see
+> [Wire up the hooks](#3-wire-up-the-claude-code-hooks)).
 
 ---
 
@@ -93,17 +96,22 @@ behaves normally. Start the daemon **before** `claude`.
 
 ---
 
-## 4. Adjust the paths
+## 4. Socket path & GJC
 
-The unix socket and the hook command paths are hardcoded. Change these to your clone:
+The daemon, the Python hooks and the GJC extension resolve the socket the same
+way (`bridge/bridge/paths.py`), so they agree with **no source edits**:
 
-- `bridge/bridge/daemon.py` — `SOCK = …/.run/bridge.sock`
-- `bridge/bridge/hooks/_send.py` — `SOCK`
-- `bridge/bridge/hooks/pretooluse.py` — `SOCK`
-- `bridge/settings-snippet.json` — every `command` path
+1. `$UCONSOLE_BRIDGE_SOCK` — explicit socket path, or
+2. `$UCONSOLE_BRIDGE_HOME/run/bridge.sock`, or
+3. `~/.uconsole-buddy/run/bridge.sock` (default).
 
-Keep the socket path identical in the daemon and all hook scripts (that's how they find each
-other).
+The **only** absolute paths left to edit are the hook `command` entries in
+`bridge/settings-snippet.json` (Claude Code needs real script paths — replace
+the `/ABSOLUTE/PATH/TO/uconsole-buddy/…` placeholders with your clone).
+
+**Using GJC (Gajae Code) / pi instead of Claude Code?** Skip step 3 entirely and
+install the extension: `bridge/gjc/install.sh` (or `gjc -e …/bridge/gjc/uconsole-buddy.ts`).
+Details in [`../bridge/gjc/README.md`](../bridge/gjc/README.md).
 
 ---
 
@@ -168,7 +176,7 @@ appliance — change that line to switch your device permanently. Strings live i
 
 ## Known limitations
 
-- Paths hardcoded (see step 4).
-- `error` state is defined but no hook emits it yet (dead path for now).
+- Socket path is configurable (see step 4); only the Claude `settings-snippet.json` hook paths are still absolute.
+- `error` state: dead on the Claude path (no hook emits it), but **the GJC extension drives it** from failed tool calls.
 - Token counters are always `0` (Claude Code hook payloads aren't wired to real usage yet).
 - Kiosk config lives under `~/.config` on the device, outside this repo.

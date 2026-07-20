@@ -106,9 +106,10 @@ class Bridge:
 import json, logging, os
 from pathlib import Path
 from .ble_central import BleCentral
+from .paths import socket_path
 
 APPROVE_TIMEOUT = 100.0
-SOCK = Path(os.path.expanduser("~/Documents/web/uconsole-companion-bridge/.run/bridge.sock"))
+SOCK = Path(socket_path())
 logging.basicConfig(filename="bridge.log", level=logging.INFO, format="%(asctime)s %(message)s")
 log = logging.getLogger("bridge")
 
