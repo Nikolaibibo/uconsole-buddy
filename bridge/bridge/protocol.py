@@ -3,12 +3,12 @@ import json
 
 
 def build_snapshot(*, state="idle", total=1, running=0, waiting=0, msg="", prompt=None,
-                   tokens=0, tokens_today=0, entries=None) -> str:
+                   tokens=0, tokens_today=0, entries=None, hud=None) -> str:
     return json.dumps({
         "state": state,
         "total": total, "running": running, "waiting": waiting, "msg": msg,
         "entries": entries or [], "tokens": tokens, "tokens_today": tokens_today,
-        "prompt": prompt,
+        "prompt": prompt, "hud": hud,
     }) + "\n"
 
 

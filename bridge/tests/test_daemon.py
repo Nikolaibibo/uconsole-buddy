@@ -124,3 +124,16 @@ def test_new_event_cancels_decay():
         await asyncio.sleep(0.15)
         assert json.loads(sent[-1])["state"] == "running"
     run(scenario())
+
+
+def test_hud_persists_across_events():
+    async def scenario():
+        b, sent = make_bridge()
+        await b.push_event(hud={"model": "Fable 5", "ctx_pct": 12})
+        await b.push_event(state="running", entry="09:00 Bash: ls")
+
+        assert json.loads(sent[0])["hud"] == {"model": "Fable 5", "ctx_pct": 12}
+        assert json.loads(sent[1])["hud"] == {"model": "Fable 5", "ctx_pct": 12}  # bleibt erhalten
+        assert json.loads(sent[1])["state"] == "running"
+
+    run(scenario())
