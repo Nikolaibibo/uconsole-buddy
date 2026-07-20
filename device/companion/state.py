@@ -13,6 +13,7 @@ class AppState:
         self.tokens = 0
         self.tokens_today = 0
         self.prompt: dict | None = None
+        self.hud: dict | None = None
         self.owner = ""
         self.name = "Claude-uConsole"
         self.appr = 0
@@ -36,6 +37,9 @@ class AppState:
         self.tokens = msg.get("tokens", self.tokens)
         self.tokens_today = msg.get("tokens_today", self.tokens_today)
         self.prompt = msg.get("prompt")  # dict oder None
+        new_hud = msg.get("hud")
+        if new_hud:
+            self.hud = new_hud
         self.claude_state = msg.get("state", "")
         new_id = self.prompt["id"] if self.prompt else ""
         if new_id != self._last_prompt_id:

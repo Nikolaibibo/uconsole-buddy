@@ -93,3 +93,13 @@ def test_mood_state_falls_back_to_connection_state():
     s.apply_snapshot({"total": 1, "running": 1}, now=100.0)  # kein state-Feld
     assert s.claude_state == ""
     assert s.mood_state(now=100.0) == "running"  # aus connection_state abgeleitet
+
+
+def test_hud_retained_when_snapshot_lacks_it():
+    s = AppState()
+    s.apply_snapshot({"state": "running", "hud": {"model": "Fable 5", "ctx_pct": 12}}, now=1.0)
+    assert s.hud == {"model": "Fable 5", "ctx_pct": 12}
+    s.apply_snapshot({"state": "waiting", "hud": None}, now=2.0)   # Prompt-Snapshot ohne hud
+    assert s.hud == {"model": "Fable 5", "ctx_pct": 12}
+    s.apply_snapshot({"state": "idle", "hud": {"model": "Fable 5", "ctx_pct": 14}}, now=3.0)
+    assert s.hud["ctx_pct"] == 14
