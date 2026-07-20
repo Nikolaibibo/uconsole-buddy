@@ -18,6 +18,7 @@ class Bridge:
         self._state = "idle"
         self._msg = "idle"
         self._entries: deque[str] = deque(maxlen=8)
+        self._hud: dict | None = None
         self._idle_task = None
 
     async def request_approval(self, req_id: str, tool: str, hint: str, timeout: float) -> str:
@@ -53,10 +54,14 @@ class Bridge:
             waiting=1 if self._state == "waiting" else 0,
             msg=self._msg,
             entries=list(self._entries),
+            hud=self._hud,
         )
 
     async def push_event(self, state: str | None = None, msg: str | None = None,
-                         entry: str | None = None, decay: float = 5.0) -> None:
+                         entry: str | None = None, decay: float = 5.0,
+                         hud: dict | None = None) -> None:
+        if hud:
+            self._hud = hud
         if entry:
             self._entries.append(entry)
         if state is not None:
@@ -119,7 +124,8 @@ def _make_handler(bridge: "Bridge"):
             elif req.get("type") == "status":
                 await bridge.push_event(state=req.get("state"),
                                         msg=req.get("msg") if "msg" in req else None,
-                                        entry=req.get("entry"))
+                                        entry=req.get("entry"),
+                                        hud=req.get("hud"))
                 decision = "ask"   # kein Approval — Antwort wird vom fire-and-forget-Hook ignoriert
             else:
                 decision = "ask"   # unbekannter Typ — kein Approval
