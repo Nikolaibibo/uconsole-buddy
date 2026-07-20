@@ -59,11 +59,10 @@ def should_send(prev: dict | None, hud: dict, now: float) -> bool:
 
 
 def _send_to_bridge(hud: dict) -> None:
-    s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-    s.settimeout(0.5)
-    s.connect(SOCK)
-    s.sendall((json.dumps({"type": "status", "hud": hud}) + "\n").encode("utf-8"))
-    s.close()
+    with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as s:
+        s.settimeout(0.5)
+        s.connect(SOCK)
+        s.sendall((json.dumps({"type": "status", "hud": hud}) + "\n").encode("utf-8"))
 
 
 def _latest_plugin_dir() -> str | None:
@@ -78,7 +77,11 @@ def _latest_plugin_dir() -> str | None:
 
 
 def main() -> int:
-    raw = sys.stdin.buffer.read()
+    raw = b""
+    try:
+        raw = sys.stdin.buffer.read()
+    except Exception:
+        pass  # Fehler beim stdin-Lesen → mit leerem payload weitermachen
     try:
         stdin_obj = json.loads(raw.decode("utf-8"))
         if not isinstance(stdin_obj, dict):
@@ -107,11 +110,14 @@ def main() -> int:
                 pass
     except Exception:
         pass  # Tee darf die Statusline nie brechen
-    plugin_dir = _latest_plugin_dir()
-    if plugin_dir is None:
-        return 0
-    proc = subprocess.run([BUN, os.path.join(plugin_dir, "src", "index.ts")], input=raw)
-    return proc.returncode
+    try:
+        plugin_dir = _latest_plugin_dir()
+        if plugin_dir is None:
+            return 0
+        proc = subprocess.run([BUN, os.path.join(plugin_dir, "src", "index.ts")], input=raw)
+        return proc.returncode
+    except Exception:
+        return 0  # Fehler beim Plugin-Lookup oder -Ausführung → lautlos ignorieren
 
 
 if __name__ == "__main__":

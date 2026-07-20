@@ -1,4 +1,7 @@
-from bridge.statusline_tee import extract_hud, should_send
+import io
+import sys
+from unittest.mock import patch
+from bridge.statusline_tee import extract_hud, should_send, main
 
 STDIN = {
     "model": {"id": "claude-fable-5", "display_name": "Fable 5"},
@@ -40,3 +43,21 @@ def test_should_send_on_change_and_heartbeat():
     assert should_send({"sent_at": 990.0, "hud": {"ctx_pct": 11}}, hud, 1000.0)  # geändert
     assert should_send({"sent_at": 960.0, "hud": hud}, hud, 1000.0)         # Heartbeat >30s
     assert not should_send(None, {}, 1000.0)                                # leeres hud → nie
+
+
+def test_main_fail_safe_missing_bun_and_plugin(tmp_path, monkeypatch):
+    """Wenn BUN und Plugin fehlen, soll main() 0 zurückgeben statt zu crashen."""
+    garbage_stdin = b"\x00\xFF\xFE invalid json"
+
+    # Monkeypatch BUN auf einen nicht-existent Pfad
+    monkeypatch.setattr("bridge.statusline_tee.BUN", "/nonexistent/bun")
+    # Monkeypatch PLUGIN_GLOB auf ein temp-Dir ohne Plugin-Dirs
+    monkeypatch.setattr("bridge.statusline_tee.PLUGIN_GLOB", str(tmp_path / "nonexistent") + "/*/")
+
+    # Simuliere stdin mit garbage Input
+    monkeypatch.setattr("sys.stdin", io.BytesIO(garbage_stdin))
+    sys.stdin = io.BytesIO(garbage_stdin)
+
+    # main() sollte ohne Exception 0 zurückgeben
+    result = main()
+    assert result == 0
