@@ -63,12 +63,42 @@ now driven by real failed tool calls.
 | `UCONSOLE_BRIDGE_SOCK` | — | Explicit socket path (overrides everything). |
 | `UCONSOLE_BRIDGE_HOME` | `~/.uconsole-buddy` | Base dir; socket is `<home>/run/bridge.sock`. |
 | `UCONSOLE_BRIDGE_APPROVE` | `bash` | `bash` (gate Bash only), `all` (gate every tool), or `off` (mood/feed only, no permission gating). |
+| `UCONSOLE_BRIDGE_ADDR` | — | `host:port` for **TCP** transport (remote setups over Tailscale etc.). Overrides the unix socket. |
 | `GERALD_LANG` | `en` | `en` or `de` for the short status words. |
 
 The daemon and the Python hooks resolve the socket path with the **same rules**
 (`bridge/bridge/paths.py`), so all sides agree without editing source. Set
 `UCONSOLE_BRIDGE_SOCK`/`UCONSOLE_BRIDGE_HOME` once (e.g. in your shell rc) if you
 want a non-default location.
+
+## Remote mode (Tailscale / no BLE)
+
+Running the agent on one host (e.g. a home server) and the uConsole somewhere
+else (e.g. your office desk)? BLE can't bridge that. Skip BLE and the bridge
+daemon entirely:
+
+1. On the **uConsole**, run the device app in TCP mode so it listens directly:
+
+   ```bash
+   UCONSOLE_TRANSPORT=tcp UCONSOLE_LISTEN=0.0.0.0:8765 \
+     .venv/bin/python -m companion.main
+   ```
+
+   (Keep the listener inside your private overlay — bind to the Tailscale
+   interface or firewall port 8765. The approval channel is exposed over the
+   network.)
+
+2. On the **agent host**, point the extension at the uConsole's Tailscale
+   address:
+
+   ```bash
+   export UCONSOLE_BRIDGE_ADDR=100.x.y.z:8765
+   gjc
+   ```
+
+No daemon, no BLE, no second machine. The device app hosts the event aggregator
+itself and speaks the same JSON protocol over TCP. Claude Code works the same
+way — set `UCONSOLE_BRIDGE_ADDR` before `claude` (the hooks honour it too).
 
 ## Fail-safe behaviour
 

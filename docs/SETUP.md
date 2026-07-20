@@ -115,6 +115,33 @@ Details in [`../bridge/gjc/README.md`](../bridge/gjc/README.md).
 
 ---
 
+## 4b. Remote setup over Tailscale (no BLE, no daemon)
+
+If the agent runs on a **different machine** than the uConsole (e.g. agent on a
+home server, uConsole on your office desk), BLE can't reach across — and there's
+no need for it. Run the device app in **TCP mode**; it hosts the event
+aggregator itself, so the separate bridge daemon and BLE are dropped entirely.
+
+**On the uConsole** (skip the `bridge/` daemon from step 2):
+
+```bash
+cd device
+UCONSOLE_TRANSPORT=tcp UCONSOLE_LISTEN=0.0.0.0:8765 .venv/bin/python -m companion.main
+```
+
+**On the agent host**, point the agent at the uConsole's Tailscale address:
+
+```bash
+export UCONSOLE_BRIDGE_ADDR=100.x.y.z:8765   # uConsole's tailnet IP
+gjc                                          # or: claude   (hooks honour it too)
+```
+
+Status/feed snapshots and the `Y`/`N` approval round-trip all flow over that one
+TCP connection. Keep it inside your private overlay (bind to the Tailscale
+interface / firewall 8765) — the approval channel is exposed over the network.
+
+---
+
 ## 5. Kiosk & autostart (optional, uConsole/labwc)
 
 To make it a full-screen appliance instead of a windowed terminal:

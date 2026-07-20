@@ -41,7 +41,20 @@ function socketPath(): string {
 	return path.join(base, "run", "bridge.sock");
 }
 
+// Transport: prefer TCP ($UCONSOLE_BRIDGE_ADDR="host:port", e.g. a Tailscale
+// address) for remote setups; otherwise the local unix socket.
+const ADDR = process.env.UCONSOLE_BRIDGE_ADDR;
 const SOCK = socketPath();
+
+function connect(): net.Socket {
+	if (ADDR) {
+		const i = ADDR.lastIndexOf(":");
+		const host = ADDR.slice(0, i) || "127.0.0.1";
+		const port = Number(ADDR.slice(i + 1));
+		return net.createConnection({ host, port });
+	}
+	return net.createConnection(SOCK);
+}
 const HINT_MAX = 120;
 const FEED_MAX = 60;
 const APPROVE_TIMEOUT_MS = 115_000;
@@ -68,7 +81,7 @@ function sendStatus(payload: Record<string, unknown>): Promise<void> {
 		};
 		let sock: net.Socket;
 		try {
-			sock = net.createConnection(SOCK);
+			sock = connect();
 		} catch {
 			finish();
 			return;
@@ -104,7 +117,7 @@ function requestApproval(id: string, tool: string, hint: string): Promise<"allow
 			resolve(decision);
 		};
 		try {
-			sock = net.createConnection(SOCK);
+			sock = connect();
 		} catch {
 			finish("ask");
 			return;

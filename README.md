@@ -4,6 +4,8 @@
 
 It started as a client for Anthropic's official **Hardware Buddy** (BLE) reference and grew into a full terminal-driven buddy via Claude Code hooks.
 
+> **This is a fork of [Nikolaibibo/uconsole-buddy](https://github.com/Nikolaibibo/uconsole-buddy)** by Nikolai Bockholt — full credit for the original Gerald companion, the BLE bridge, and the German design docs goes to the upstream author. This fork adds **GJC (Gajae Code) / pi support** and a **remote TCP transport** (run the agent on one host, the uConsole on another, linked over Tailscale — no BLE, no bridge daemon).
+
 ```
         ◦ Gerald ◦
 
@@ -64,8 +66,8 @@ Both parts keep their own git history (imported via `git subtree`).
 
 See **[docs/SETUP.md](docs/SETUP.md)** for the full walkthrough (device + bridge + wiring the hooks + kiosk + troubleshooting).
 
-> ⚠️ **Heads-up:** the socket path and the hook command paths are currently **hardcoded** to the author's home directory (`~/Documents/web/uconsole-companion-bridge/…`). You'll need to adjust them — SETUP.md lists exactly where.
+> ℹ️ The socket path is configurable (`UCONSOLE_BRIDGE_SOCK`/`UCONSOLE_BRIDGE_HOME`, default `~/.uconsole-buddy/run/bridge.sock`); only the Claude `settings-snippet.json` hook paths are absolute. For remote/Tailscale use, see [`bridge/gjc/README.md`](bridge/gjc/README.md#remote-mode-tailscale--no-ble).
 
 ## Credits
 
-Built on Anthropic's [`claude-desktop-buddy`](https://github.com/anthropics/claude-desktop-buddy) protocol (reference firmware: M5StickC Plus). This project adds a uConsole peripheral, a Claude-Code-hooks bridge for terminal sessions, and the Gerald kiosk UI. Design specs & implementation plans (German) live in `docs/`.
+Original project & upstream: **[Nikolaibibo/uconsole-buddy](https://github.com/Nikolaibibo/uconsole-buddy)** (Nikolai Bockholt). Built on Anthropic's [`claude-desktop-buddy`](https://github.com/anthropics/claude-desktop-buddy) protocol (reference firmware: M5StickC Plus). The upstream project contributes the uConsole peripheral, the Claude-Code-hooks bridge, and the Gerald kiosk UI; design specs & plans (German) live in `docs/`. **This fork** adds the GJC/pi extension (`bridge/gjc/`), a configurable socket path, and the direct-TCP remote transport (`device/companion/net_server.py`, `UCONSOLE_TRANSPORT=tcp`).
