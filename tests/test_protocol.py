@@ -48,3 +48,15 @@ def test_build_snapshot_has_state():
 def test_build_snapshot_default_state_idle():
     m = json.loads(build_snapshot())
     assert m["state"] == "idle"
+
+def test_build_snapshot_carries_hud():
+    hud = {"model": "Fable 5", "ctx_pct": 12, "project": "marvin",
+           "usage_5h": 5, "usage_7d": 23,
+           "reset_5h_iso": "2026-07-20T10:29:59.955Z", "plan": "Team"}
+    snap = json.loads(build_snapshot(state="running", hud=hud))
+    assert snap["hud"] == hud
+
+
+def test_build_snapshot_hud_defaults_none():
+    snap = json.loads(build_snapshot())
+    assert snap["hud"] is None
