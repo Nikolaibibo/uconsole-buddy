@@ -1,6 +1,6 @@
 import io
 import sys
-from unittest.mock import patch
+from types import SimpleNamespace
 from bridge.statusline_tee import extract_hud, should_send, main
 
 STDIN = {
@@ -45,19 +45,24 @@ def test_should_send_on_change_and_heartbeat():
     assert not should_send(None, {}, 1000.0)                                # leeres hud → nie
 
 
-def test_main_fail_safe_missing_bun_and_plugin(tmp_path, monkeypatch):
-    """Wenn BUN und Plugin fehlen, soll main() 0 zurückgeben statt zu crashen."""
-    garbage_stdin = b"\x00\xFF\xFE invalid json"
+def test_main_fail_safe_subprocess_not_found(tmp_path, monkeypatch):
+    """subprocess.run() FileNotFoundError (BUN missing) → main() returns 0, not traceback."""
+    # Create a real plugin directory so _latest_plugin_dir() returns non-None
+    plugin_dir = tmp_path / "1.0.0"
+    plugin_dir.mkdir()
+    (plugin_dir / "src").mkdir()
+    (plugin_dir / "src" / "index.ts").write_text("// dummy plugin")
 
-    # Monkeypatch BUN auf einen nicht-existent Pfad
-    monkeypatch.setattr("bridge.statusline_tee.BUN", "/nonexistent/bun")
-    # Monkeypatch PLUGIN_GLOB auf ein temp-Dir ohne Plugin-Dirs
-    monkeypatch.setattr("bridge.statusline_tee.PLUGIN_GLOB", str(tmp_path / "nonexistent") + "/*/")
+    # Monkeypatch paths so subprocess.run() is reached with missing BUN
+    monkeypatch.setattr("bridge.statusline_tee.BUN", str(tmp_path / "no-such-bun"))
+    monkeypatch.setattr("bridge.statusline_tee.PLUGIN_GLOB", str(tmp_path / "*/"))
+    monkeypatch.setattr("bridge.statusline_tee.STATE_FILE", str(tmp_path / "state.json"))
+    monkeypatch.setattr("bridge.statusline_tee.SOCK", str(tmp_path / "bridge.sock"))
 
-    # Simuliere stdin mit garbage Input
-    monkeypatch.setattr("sys.stdin", io.BytesIO(garbage_stdin))
-    sys.stdin = io.BytesIO(garbage_stdin)
+    # Create stdin mock with .buffer attribute (to avoid AttributeError on .buffer.read())
+    stdin_mock = SimpleNamespace(buffer=io.BytesIO(b"\xff\xfe not json"))
+    monkeypatch.setattr("sys.stdin", stdin_mock)
 
-    # main() sollte ohne Exception 0 zurückgeben
+    # main() should return 0 without raising FileNotFoundError from subprocess.run()
     result = main()
     assert result == 0
