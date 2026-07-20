@@ -2,7 +2,7 @@
 # bridge/hooks/pretooluse.py — dünn, zustandslos, fail-safe ask
 import json, os, socket, sys
 
-SOCK = os.path.expanduser("~/Documents/web/uconsole-companion-bridge/.run/bridge.sock")
+from _send import open_conn
 HINT_MAX = 120
 
 
@@ -30,9 +30,7 @@ def main():
     req_id = f"{ev.get('session_id', 's')}#{os.getpid()}"
     hint = hint_from(tool, ev.get("tool_input", {}) or {})
     try:
-        s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-        s.settimeout(115)
-        s.connect(SOCK)
+        s = open_conn(115)
         s.sendall((json.dumps({"type": "approve", "id": req_id, "tool": tool, "hint": hint}) + "\n").encode())
         reply = json.loads(s.recv(400).decode())
         decision = reply.get("decision", "ask")

@@ -1,7 +1,12 @@
 """Lokalisierung — alle sichtbaren Strings pro Sprache.
 
-Sprache über Env-Var `GERALD_LANG` (`en` | `de`, Default `en`). Auf Nikolais Gerät
-setzt run-debug.sh `GERALD_LANG=de`; öffentliche Klone starten englisch."""
+Sprache über Env-Var `GERALD_LANG` (`en` | `de` | `ko`, Default `en`). Auf Nikolais
+Gerät setzt run-debug.sh `GERALD_LANG=de`; öffentliche Klone starten englisch.
+
+Hinweis: das große Status-Wort wird mit figlet (ASCII-Blockschrift) gerendert.
+Für nicht-lateinische Sprachen (z.B. `ko`) fällt big_word() auf normalen Text
+zurück — dafür muss die Terminal-Schrift die Glyphen haben (Hangul: fonts-nanum
+/ Noto CJK)."""
 import os
 
 _STRINGS = {
@@ -23,6 +28,14 @@ _STRINGS = {
         "connected": "verbunden", "disc": "getrennt",
         "sound_on": "Ton an", "muted": "stumm",
         "may_i": "darf ich?", "yes": "klar", "no": "nö",
+    },
+    "ko": {
+        "idle": "대기", "thinking": "생각 중", "running": "작업 중",
+        "waiting": "확인 필요", "done": "완료", "error": "오류",
+        "offline": "오프라인", "disconnected": "오프라인", "_fallback": "…",
+        "connected": "연결됨", "disc": "끊김",
+        "sound_on": "소리 켬", "muted": "음소거",
+        "may_i": "허용?", "yes": "예", "no": "아니오",
     },
 }
 

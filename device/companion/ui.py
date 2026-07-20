@@ -34,7 +34,11 @@ def big_word(word: str) -> str:
     token = _ascii(word).upper().replace("!", "").strip()
     if token in _fig_cache:
         return _fig_cache[token]
-    if _FIG is None:
+    if not token.isascii():
+        # figlet fonts are ASCII-only; render non-Latin (e.g. Hangul) as plain
+        # text — relies on the terminal font having the glyphs.
+        art = word.strip()
+    elif _FIG is None:
         art = " ".join(token)
     else:
         art = "\n".join(l.rstrip() for l in _FIG.renderText(token).splitlines() if l.strip())
@@ -163,7 +167,9 @@ class CompanionApp(App):
             self.query_one("#word", Static).update(f"[bold {color}]{big_word(word_for(st))}[/]")
             self.query_one("#anim", Static).update(f"[{color}]{self._accent(st)}[/]")
             ctx = state.entries[-1] if state.entries else ""
-            self.query_one("#ctx", Static).update(_clip(ctx, 52))
+            if state.total > 1:
+                ctx = f"[◱{state.total} ▶{state.running} ⏸{state.waiting}]  {ctx}"
+            self.query_one("#ctx", Static).update(_clip(ctx, 60))
             self.query_one("#hud", Static).update(hud_line(self._state.hud))
 
         conn = state.connection_state(now)
