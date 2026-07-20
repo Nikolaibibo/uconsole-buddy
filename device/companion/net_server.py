@@ -3,49 +3,48 @@
 For remote setups (agent on one host, uConsole on another, linked over a private
 overlay such as Tailscale) the BLE central/peripheral split does not work: BLE is
 short-range and needs a machine next to the device. This module collapses the
-former host-side bridge daemon INTO the device app: it runs the same event
-aggregator (`Bridge`) plus an asyncio TCP server, so an agent extension/hook can
-connect directly and speak the exact same JSON protocol as the unix socket.
+former host-side bridge daemon INTO the device app: it runs a session-aware event
+aggregator (`Bridge`) plus an asyncio TCP server, so multiple agent sessions can
+connect at once and speak the same newline-JSON protocol as the unix socket.
 
-Wire protocol (newline-delimited JSON), identical to bridge/bridge/protocol.py:
-  agent -> device : {"type":"status", state?, msg?, entry?, hud?}
-                    {"type":"approve", id, tool, hint}
+Multi-session (e.g. several tmux windows each running gjc/claude):
+  Each agent tags its events with `sid` (stable per process) and `label` (project
+  name). The aggregator keeps per-session state and emits ONE aggregate snapshot:
+    - mood     = highest-priority state across sessions (waiting > error > running
+                 > thinking > done > idle)
+    - total/running/waiting = live session counts (shown on the device)
+    - feed     = merged recent tool lines, tagged "label▸…"
+  Approvals are queued: one overlay at a time, labelled with its session.
+
+Wire protocol (newline-delimited JSON):
+  agent -> device : {"type":"status", sid?, label?, state?, msg?, entry?, hud?}
+                    {"type":"approve", id, sid?, label?, tool, hint}
   device -> agent : {"decision": "allow"|"deny"|"ask"}   (reply to approve)
-
-Snapshots produced by the aggregator are injected into the UI via the
-`on_snapshot(line)` callback (the same line format the BLE path receives).
-Device Y/N decisions are fed back in via `on_device_line(line)`.
 """
 import asyncio
 import json
 import logging
+import time
 from collections import deque
 from typing import Awaitable, Callable
 
 log = logging.getLogger("companion.net")
 
 APPROVE_TIMEOUT = 100.0
-HEARTBEAT_S = 15.0  # keep the "connected" face alive between events
+HEARTBEAT_S = 15.0        # keep the "connected" face alive + prune stale sessions
+SESSION_TTL = 120.0       # drop a session with no events for this long
+DONE_DECAY_S = 5.0        # a finished session falls back to idle after this
+
+_PRIORITY = {"waiting": 0, "error": 1, "running": 2, "thinking": 3,
+             "done": 4, "idle": 5, "offline": 6, "disconnected": 6}
 
 
-# ---- Snapshot / permission builders (mirror of bridge/bridge/protocol.py) ----
-def build_snapshot(*, state="idle", total=1, running=0, waiting=0, msg="",
-                   prompt=None, tokens=0, tokens_today=0, entries=None, hud=None) -> str:
+def _snapshot(*, state, total, running, waiting, msg, prompt, entries, hud) -> str:
     return json.dumps({
         "state": state, "total": total, "running": running, "waiting": waiting,
-        "msg": msg, "entries": entries or [], "tokens": tokens,
-        "tokens_today": tokens_today, "prompt": prompt, "hud": hud,
+        "msg": msg, "entries": list(entries), "tokens": 0, "tokens_today": 0,
+        "prompt": prompt, "hud": hud,
     }) + "\n"
-
-
-def build_prompt_snapshot(prompt_id: str, tool: str, hint: str) -> str:
-    return build_snapshot(state="waiting", total=1, running=0, waiting=1,
-                          msg=f"approve: {tool}",
-                          prompt={"id": prompt_id, "tool": tool, "hint": hint})
-
-
-def build_cleared_snapshot() -> str:
-    return build_snapshot(total=1, running=0, waiting=0, msg="idle", prompt=None)
 
 
 def parse_permission(line: str) -> dict | None:
@@ -62,36 +61,124 @@ def decision_to_hook(decision: str | None) -> str:
     return {"once": "allow", "deny": "deny"}.get(decision, "ask")
 
 
-# ---- Aggregator (mirror of bridge/bridge/daemon.py Bridge) --------------------
 class Bridge:
     def __init__(self, send_snapshot: Callable[[str], Awaitable[None]]):
         self._send = send_snapshot
-        self._pending: dict[str, asyncio.Future] = {}
-        self._state = "idle"
-        self._msg = "idle"
-        self._entries: deque[str] = deque(maxlen=8)
+        self._sessions: dict[str, dict] = {}   # sid -> {state,label,ts}
+        self._feed: deque[str] = deque(maxlen=8)
         self._hud: dict | None = None
-        self._idle_task = None
+        # approval queue
+        self._pending: dict[str, asyncio.Future] = {}   # id -> future
+        self._prompts: dict[str, dict] = {}             # id -> {tool,hint,label}
+        self._queue: deque[str] = deque()               # ids waiting to be shown
+        self._active: str | None = None                 # id currently on screen
 
-    async def request_approval(self, req_id: str, tool: str, hint: str, timeout: float) -> str:
-        loop = asyncio.get_running_loop()
-        fut: asyncio.Future = loop.create_future()
-        self._pending[req_id] = fut
+    # ---- session state ----
+    def _touch(self, sid: str, label: str | None, state: str | None, now: float) -> None:
+        s = self._sessions.setdefault(sid, {"state": "idle", "label": "", "ts": now})
+        if label:
+            s["label"] = label
+        if state is not None:
+            s["state"] = state
+        s["ts"] = now
+
+    def _prune(self, now: float) -> None:
+        stale = [sid for sid, s in self._sessions.items() if now - s["ts"] > SESSION_TTL]
+        for sid in stale:
+            del self._sessions[sid]
+
+    def _agg_state(self) -> str:
+        if not self._sessions:
+            return "idle"
+        return min((s["state"] for s in self._sessions.values()),
+                   key=lambda st: _PRIORITY.get(st, 5))
+
+    def _counts(self) -> tuple[int, int, int]:
+        total = len(self._sessions)
+        running = sum(1 for s in self._sessions.values() if s["state"] in ("running", "thinking"))
+        waiting = sum(1 for s in self._sessions.values() if s["state"] == "waiting")
+        return total, running, waiting
+
+    def _state_snapshot(self) -> str:
+        total, running, waiting = self._counts()
+        st = self._agg_state()
+        return _snapshot(state=st, total=max(total, 1), running=running, waiting=waiting,
+                         msg=f"{total} sessions" if total > 1 else st,
+                         prompt=None, entries=self._feed, hud=self._hud)
+
+    async def _emit(self) -> None:
+        if self._active is not None:          # an approval overlay is showing
+            return
+        await self._send(self._state_snapshot())
+
+    async def push_event(self, sid=None, label=None, state=None, msg=None,
+                         entry=None, hud=None) -> None:
+        now = time.monotonic()
+        if hud:
+            self._hud = hud
+        if entry:
+            self._feed.append(f"{label}▸{entry}" if label else entry)
+        key = sid or "_"
+        self._touch(key, label, state, now)
+        if state == "done":
+            asyncio.ensure_future(self._decay(key))
+        self._prune(now)
+        await self._emit()
+
+    async def _decay(self, sid: str) -> None:
         try:
-            await self._send(build_prompt_snapshot(req_id, tool, hint))
-            try:
-                return await asyncio.wait_for(fut, timeout=timeout)
-            except asyncio.TimeoutError:
-                return "ask"
+            await asyncio.sleep(DONE_DECAY_S)
+        except asyncio.CancelledError:
+            return
+        s = self._sessions.get(sid)
+        if s and s["state"] == "done":
+            s["state"] = "idle"
+            await self._emit()
+
+    # ---- approvals (queued, one overlay at a time) ----
+    async def _show_prompt(self, pid: str) -> None:
+        p = self._prompts[pid]
+        hint = f"{p['label']}▸{p['hint']}" if p.get("label") else p["hint"]
+        await self._send(_snapshot(state="waiting", total=max(len(self._sessions), 1),
+                                   running=0, waiting=1, msg=f"approve: {p['tool']}",
+                                   prompt={"id": pid, "tool": p["tool"], "hint": hint},
+                                   entries=self._feed, hud=self._hud))
+
+    async def _advance(self) -> None:
+        while self._queue:
+            nxt = self._queue[0]
+            if nxt in self._pending:
+                self._active = nxt
+                await self._show_prompt(nxt)
+                return
+            self._queue.popleft()
+        self._active = None
+        await self._emit()   # no more prompts → back to aggregate face
+
+    async def request_approval(self, req_id, tool, hint, timeout, sid=None, label=None) -> str:
+        loop = asyncio.get_running_loop()
+        fut = loop.create_future()
+        self._pending[req_id] = fut
+        self._prompts[req_id] = {"tool": tool, "hint": hint, "label": label or ""}
+        self._queue.append(req_id)
+        if self._active is None:
+            await self._advance()
+        try:
+            return await asyncio.wait_for(fut, timeout=timeout)
+        except asyncio.TimeoutError:
+            return "ask"
         finally:
             self._pending.pop(req_id, None)
+            self._prompts.pop(req_id, None)
             try:
-                await self._send(build_cleared_snapshot())
-            except Exception:
+                self._queue.remove(req_id)
+            except ValueError:
                 pass
+            if self._active == req_id:
+                await self._advance()
 
     def on_device_line(self, line: str) -> None:
-        """A device Y/N decision (build_permission line) resolves a pending approval."""
+        """A device Y/N decision resolves the currently-shown approval."""
         p = parse_permission(line)
         if not p:
             return
@@ -99,57 +186,16 @@ class Bridge:
         if fut and not fut.done():
             fut.set_result(decision_to_hook(p["decision"]))
 
-    def _build_state_snapshot(self) -> str:
-        return build_snapshot(
-            state=self._state, total=1,
-            running=1 if self._state in ("running", "thinking") else 0,
-            waiting=1 if self._state == "waiting" else 0,
-            msg=self._msg, entries=list(self._entries), hud=self._hud,
-        )
-
-    async def push_event(self, state=None, msg=None, entry=None, decay=5.0, hud=None) -> None:
-        if hud:
-            self._hud = hud
-        if entry:
-            self._entries.append(entry)
-        if state is not None:
-            self._state = state
-            self._cancel_decay()
-            if state == "done":
-                self._idle_task = asyncio.ensure_future(self._decay_to_idle(decay))
-        if msg is not None:
-            self._msg = msg
-        if self._pending:  # active approval overlay wins
-            return
-        await self._send(self._build_state_snapshot())
-
     async def heartbeat(self) -> None:
-        if not self._pending:
-            await self._send(self._build_state_snapshot())
-
-    def _cancel_decay(self) -> None:
-        if self._idle_task is not None and not self._idle_task.done():
-            self._idle_task.cancel()
-        self._idle_task = None
-
-    async def _decay_to_idle(self, delay: float) -> None:
-        try:
-            await asyncio.sleep(delay)
-        except asyncio.CancelledError:
-            return
-        self._state = "idle"
-        self._msg = "idle"
-        if not self._pending:
-            await self._send(self._build_state_snapshot())
+        self._prune(time.monotonic())
+        await self._emit()
 
     def fail_pending(self) -> None:
         for fut in self._pending.values():
             if not fut.done():
                 fut.set_result("ask")
-        self._pending.clear()
 
 
-# ---- TCP transport shell ------------------------------------------------------
 class NetTransport:
     """Owns a Bridge and an asyncio TCP server. `on_snapshot` injects snapshot
     lines into the UI; device decisions come back via `on_device_line`."""
@@ -162,7 +208,6 @@ class NetTransport:
         self._server: asyncio.AbstractServer | None = None
 
     async def _send_snapshot(self, line: str) -> None:
-        # Bridge is async; the UI callback is sync.
         self._on_snapshot(line.rstrip("\n"))
 
     def on_device_line(self, line: str) -> None:
@@ -183,11 +228,13 @@ class NetTransport:
                 t = req.get("type")
                 if t == "approve":
                     decision = await self.bridge.request_approval(
-                        req.get("id", "?"), req.get("tool", "?"), req.get("hint", ""), APPROVE_TIMEOUT)
+                        req.get("id", "?"), req.get("tool", "?"), req.get("hint", ""),
+                        APPROVE_TIMEOUT, sid=req.get("sid"), label=req.get("label"))
                     writer.write((json.dumps({"decision": decision}) + "\n").encode("utf-8"))
                     await writer.drain()
                 elif t == "status":
                     await self.bridge.push_event(
+                        sid=req.get("sid"), label=req.get("label"),
                         state=req.get("state"),
                         msg=req.get("msg") if "msg" in req else None,
                         entry=req.get("entry"), hud=req.get("hud"))
@@ -198,7 +245,6 @@ class NetTransport:
         except Exception as e:  # noqa: BLE001 — never kill the UI on a bad client
             log.info("handler error: %s", e)
         finally:
-            self.bridge.fail_pending()
             try:
                 writer.close()
             except Exception:
@@ -218,6 +264,5 @@ class NetTransport:
             except Exception:
                 pass
 
-    # Symmetry with NusPeripheral.send_line so main.py can treat both the same.
     async def send_line(self, line: str) -> None:
         self.on_device_line(line)

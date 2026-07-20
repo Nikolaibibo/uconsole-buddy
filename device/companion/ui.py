@@ -167,7 +167,9 @@ class CompanionApp(App):
             self.query_one("#word", Static).update(f"[bold {color}]{big_word(word_for(st))}[/]")
             self.query_one("#anim", Static).update(f"[{color}]{self._accent(st)}[/]")
             ctx = state.entries[-1] if state.entries else ""
-            self.query_one("#ctx", Static).update(_clip(ctx, 52))
+            if state.total > 1:
+                ctx = f"[◱{state.total} ▶{state.running} ⏸{state.waiting}]  {ctx}"
+            self.query_one("#ctx", Static).update(_clip(ctx, 60))
             self.query_one("#hud", Static).update(hud_line(self._state.hud))
 
         conn = state.connection_state(now)

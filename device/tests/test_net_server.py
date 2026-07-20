@@ -1,24 +1,22 @@
-"""End-to-end test for the TCP transport: raw client (agent) <-> NetTransport."""
+"""E2E test for the TCP transport: multi-session aggregation + queued approvals."""
 import asyncio
 import json
-import sys
 import os
+import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from companion.net_server import NetTransport
 
 
-async def _read_json_line(reader):
+async def _line(reader):
     raw = await asyncio.wait_for(reader.readline(), timeout=5)
     return json.loads(raw.decode())
 
 
 async def run():
-    snapshots = []
-    t = NetTransport(on_snapshot=lambda line: snapshots.append(json.loads(line)),
-                     host="127.0.0.1", port=0)
-    # bind to an ephemeral port
+    snaps = []
+    t = NetTransport(on_snapshot=lambda l: snaps.append(json.loads(l)), host="127.0.0.1", port=0)
     t._server = await asyncio.start_server(t._handle, "127.0.0.1", 0)
     port = t._server.sockets[0].getsockname()[1]
 
@@ -30,41 +28,59 @@ async def run():
         if not cond:
             fails += 1
 
-    # --- status event ---
-    r, w = await asyncio.open_connection("127.0.0.1", port)
-    w.write((json.dumps({"type": "status", "state": "running", "entry": "12:00 Bash: ls"}) + "\n").encode())
-    await w.drain()
-    ack = await _read_json_line(r)
-    check(ack.get("decision") == "ask", "status ack returned")
-    w.close()
-    await asyncio.sleep(0.05)
-    last = snapshots[-1]
-    check(last["state"] == "running", "snapshot state=running")
-    check("12:00 Bash: ls" in last["entries"], "feed entry propagated")
+    async def status(**kw):
+        r, w = await asyncio.open_connection("127.0.0.1", port)
+        w.write((json.dumps({"type": "status", **kw}) + "\n").encode())
+        await w.drain()
+        await _line(r)
+        w.close()
 
-    # --- approval: agent asks, device says allow ---
-    r2, w2 = await asyncio.open_connection("127.0.0.1", port)
-    w2.write((json.dumps({"type": "approve", "id": "req1", "tool": "bash", "hint": "rm x"}) + "\n").encode())
-    await w2.drain()
+    # --- two sessions: A running(+feed), B thinking ---
+    await status(sid="A", label="alpha", state="running", entry="npm test")
+    await status(sid="B", label="beta", state="thinking")
     await asyncio.sleep(0.05)
-    prompt_snap = snapshots[-1]
-    check(prompt_snap.get("prompt", {}) and prompt_snap["prompt"]["id"] == "req1", "prompt overlay snapshot emitted")
-    # device UI decides 'once' -> feeds a permission line into the transport
-    t.on_device_line(json.dumps({"cmd": "permission", "id": "req1", "decision": "once"}))
-    reply = await _read_json_line(r2)
-    check(reply.get("decision") == "allow", "device 'once' -> agent gets allow")
-    w2.close()
+    last = snaps[-1]
+    check(last["total"] == 2, f"total=2 ({last['total']})")
+    check(last["running"] == 2, f"running counts thinking too ({last['running']})")
+    check(last["state"] == "running", f"agg state=running ({last['state']})")
+    check(any("alpha▸npm test" in e for e in last["entries"]), "feed tagged with label")
 
-    # --- approval: device denies ---
-    r3, w3 = await asyncio.open_connection("127.0.0.1", port)
-    w3.write((json.dumps({"type": "approve", "id": "req2", "tool": "bash", "hint": "sudo"}) + "\n").encode())
-    await w3.drain()
+    # --- B goes waiting -> aggregate must escalate to waiting ---
+    await status(sid="B", label="beta", state="waiting")
     await asyncio.sleep(0.05)
-    t.on_device_line(json.dumps({"cmd": "permission", "id": "req2", "decision": "deny"}))
-    reply3 = await _read_json_line(r3)
-    check(reply3.get("decision") == "deny", "device 'deny' -> agent gets deny")
-    w3.close()
+    last = snaps[-1]
+    check(last["state"] == "waiting", f"waiting wins priority ({last['state']})")
+    check(last["waiting"] == 1 and last["total"] == 2, "counts: 1 waiting / 2 total")
 
+    # --- queued approvals: A then B; one overlay at a time ---
+    ra, wa = await asyncio.open_connection("127.0.0.1", port)
+    wa.write((json.dumps({"type": "approve", "id": "a1", "sid": "A", "label": "alpha",
+                          "tool": "bash", "hint": "rm a"}) + "\n").encode())
+    await wa.drain()
+    await asyncio.sleep(0.05)
+    p1 = snaps[-1].get("prompt")
+    check(bool(p1) and p1["id"] == "a1" and "alpha▸" in p1["hint"], "first approval shown with label")
+
+    rb, wb = await asyncio.open_connection("127.0.0.1", port)
+    wb.write((json.dumps({"type": "approve", "id": "b1", "sid": "B", "label": "beta",
+                          "tool": "bash", "hint": "rm b"}) + "\n").encode())
+    await wb.drain()
+    await asyncio.sleep(0.05)
+    check(snaps[-1].get("prompt", {}).get("id") == "a1", "second approval queued (still showing a1)")
+
+    # decide a1 -> allow, then b1 should surface
+    t.on_device_line(json.dumps({"cmd": "permission", "id": "a1", "decision": "once"}))
+    check((await _line(ra)).get("decision") == "allow", "a1 -> allow")
+    await asyncio.sleep(0.05)
+    check(snaps[-1].get("prompt", {}).get("id") == "b1", "b1 surfaces after a1 resolved")
+
+    # decide b1 -> deny, then back to aggregate face
+    t.on_device_line(json.dumps({"cmd": "permission", "id": "b1", "decision": "deny"}))
+    check((await _line(rb)).get("decision") == "deny", "b1 -> deny")
+    await asyncio.sleep(0.05)
+    check(snaps[-1].get("prompt") is None, "overlay cleared after queue drains")
+
+    wa.close(); wb.close()
     t._server.close()
     print("\n" + ("ALL PASS" if fails == 0 else f"{fails} FAILURE(S)"))
     return fails

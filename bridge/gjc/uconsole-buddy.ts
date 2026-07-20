@@ -59,6 +59,16 @@ const HINT_MAX = 120;
 const FEED_MAX = 60;
 const APPROVE_TIMEOUT_MS = 115_000;
 const STATUS_TIMEOUT_MS = 3_000;
+// Session identity for multi-session aggregation on the device (e.g. several
+// tmux windows). sid is stable per gjc process; label is the project dir name.
+const SID = String(process.pid);
+const LABEL = (() => {
+	try {
+		return path.basename(process.cwd()) || os.hostname();
+	} catch {
+		return os.hostname();
+	}
+})();
 // Which tools require a physical approval on the device. "bash" (default),
 // "all", or "off". Mirrors Claude's PreToolUse(Bash) matcher.
 const GATE = (process.env.UCONSOLE_BRIDGE_APPROVE ?? "bash").toLowerCase();
@@ -88,7 +98,7 @@ function sendStatus(payload: Record<string, unknown>): Promise<void> {
 		}
 		sock.setTimeout(STATUS_TIMEOUT_MS);
 		sock.on("connect", () => {
-			sock.write(`${JSON.stringify({ type: "status", ...payload })}\n`);
+			sock.write(`${JSON.stringify({ type: "status", sid: SID, label: LABEL, ...payload })}\n`);
 			sock.end();
 		});
 		sock.on("timeout", () => {
@@ -124,7 +134,7 @@ function requestApproval(id: string, tool: string, hint: string): Promise<"allow
 		}
 		sock.setTimeout(APPROVE_TIMEOUT_MS);
 		sock.on("connect", () => {
-			sock.write(`${JSON.stringify({ type: "approve", id, tool, hint })}\n`);
+			sock.write(`${JSON.stringify({ type: "approve", id, tool, hint, sid: SID, label: LABEL })}\n`);
 		});
 		sock.on("data", (chunk) => {
 			buf += chunk.toString("utf-8");
