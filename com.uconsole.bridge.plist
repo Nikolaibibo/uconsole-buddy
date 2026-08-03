@@ -8,7 +8,7 @@
   <array>
     <string>/bin/bash</string>
     <string>-lc</string>
-    <string>$HOME/Documents/web/uconsole-companion-bridge/bridge/run.sh</string>
+    <string>$HOME/opt/uconsole-companion-bridge/bridge/run.sh</string>
   </array>
   <key>RunAtLoad</key>
   <true/>

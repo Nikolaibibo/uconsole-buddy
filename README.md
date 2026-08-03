@@ -68,6 +68,6 @@ oder via launchd) **vor** dem Start der `claude`-Session laufen haben.
 
 **Nur ein Central.** Siehe oben — Hardware Buddy (oder andere verbundene Apps) vorher trennen.
 
-**Socket-Pfad.** `$HOME/Documents/web/uconsole-companion-bridge/.run/bridge.sock`, Verzeichnis
+**Socket-Pfad.** `$HOME/opt/uconsole-companion-bridge/.run/bridge.sock`, Verzeichnis
 `0700`, Socket `0600`. Bei Berechtigungsproblemen `.run/` löschen — der Daemon legt Verzeichnis
 + Socket beim Start neu an.

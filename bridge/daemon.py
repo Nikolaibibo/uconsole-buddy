@@ -108,7 +108,7 @@ from pathlib import Path
 from .ble_central import BleCentral
 
 APPROVE_TIMEOUT = 100.0
-SOCK = Path(os.path.expanduser("~/Documents/web/uconsole-companion-bridge/.run/bridge.sock"))
+SOCK = Path(os.path.expanduser("~/opt/uconsole-companion-bridge/.run/bridge.sock"))
 logging.basicConfig(filename="bridge.log", level=logging.INFO, format="%(asctime)s %(message)s")
 log = logging.getLogger("bridge")
 

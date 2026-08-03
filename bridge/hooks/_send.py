@@ -1,7 +1,7 @@
 # bridge/hooks/_send.py — shared fire-and-forget status sender. NOT a hook itself.
 import json, os, socket, sys
 
-SOCK = os.path.expanduser("~/Documents/web/uconsole-companion-bridge/.run/bridge.sock")
+SOCK = os.path.expanduser("~/opt/uconsole-companion-bridge/.run/bridge.sock")
 
 
 def build_status_payload(state=None, msg=None, entry=None):
