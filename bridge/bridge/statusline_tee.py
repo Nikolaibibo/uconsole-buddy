@@ -13,7 +13,7 @@ import subprocess
 import sys
 import time
 
-SOCK = os.path.expanduser("~/Documents/web/uconsole-companion-bridge/.run/bridge.sock")
+SOCK = os.path.expanduser("~/opt/uconsole-companion-bridge/.run/bridge.sock")
 USAGE_CACHE = os.path.expanduser("~/.claude/plugins/claude-hud/.usage-cache.json")
 STATE_FILE = "/tmp/gerald-hud-state.json"
 HEARTBEAT_S = 30.0
@@ -44,6 +44,8 @@ def extract_hud(stdin_obj: dict, cache_obj: dict | None) -> dict:
             hud["usage_7d"] = round(data["sevenDay"])
         if data.get("fiveHourResetAt"):
             hud["reset_5h_iso"] = data["fiveHourResetAt"]
+        if data.get("sevenDayResetAt"):
+            hud["reset_7d_iso"] = data["sevenDayResetAt"]
         if data.get("planName"):
             hud["plan"] = data["planName"]
     return hud

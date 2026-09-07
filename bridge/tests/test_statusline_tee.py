@@ -22,7 +22,19 @@ def test_extract_full():
     hud = extract_hud(STDIN, CACHE)
     assert hud == {"model": "Fable 5", "ctx_pct": 12, "project": "marvin",
                    "usage_5h": 5, "usage_7d": 23,
-                   "reset_5h_iso": "2026-07-20T10:29:59.955Z", "plan": "Team"}
+                   "reset_5h_iso": "2026-07-20T10:29:59.955Z",
+                   "reset_7d_iso": "2026-07-22T05:59:59.955Z", "plan": "Team"}
+
+
+def test_seven_day_reset_is_extracted_when_present():
+    """Der Weekly-Countdown auf dem Geraet braucht sevenDayResetAt."""
+    hud = extract_hud(STDIN, CACHE)
+    assert hud["reset_7d_iso"] == "2026-07-22T05:59:59.955Z"
+
+
+def test_seven_day_reset_omitted_when_missing():
+    cache = {"data": {"planName": "Team", "sevenDay": 23}}
+    assert "reset_7d_iso" not in extract_hud(STDIN, cache)
 
 
 def test_extract_partial_no_cache_no_ctx():
