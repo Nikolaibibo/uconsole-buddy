@@ -12,6 +12,7 @@ from .mood import mood_for, face_box, CLOSED_EYES
 from .i18n import t, word_for
 from .state import AppState
 from .hud import hud_line
+from .usage_screen import usage_art, border_color
 
 try:
     from pyfiglet import Figlet
@@ -60,6 +61,8 @@ class CompanionApp(App):
     #hud   { width: 100%; text-align: center; padding: 1 0 0 0; }
     #foot  { dock: bottom; width: 100%; text-align: center; color: #6b6b6b; }
     #overlay { display: none; }
+    #usage { display: none; }
+    #usage.active { display: block; width: 100%; height: 100%; }
     #overlay.active { display: block; width: 100%; height: 100%; align: center middle; }
     """
 
@@ -68,6 +71,7 @@ class CompanionApp(App):
         ("enter", "approve", "erlauben"),
         ("n", "deny", "ablehnen"),
         ("escape", "deny", "ablehnen"),
+        ("u", "toggle_usage", "usage"),
         ("m", "mute", "stumm"),
         ("q", "quit", "beenden"),
     ]
@@ -80,6 +84,7 @@ class CompanionApp(App):
         self._state: Optional[AppState] = None
         self._muted = False
         self._frame = 0
+        self._usage = False
 
     def compose(self) -> ComposeResult:
         with Container(id="root"):
@@ -92,6 +97,7 @@ class CompanionApp(App):
                 yield Static("", id="ctx")
                 yield Static("", id="hud")
             yield Static("", id="overlay")
+            yield Static("", id="usage")
 
     def on_mount(self) -> None:
         # Animations-Herzschlag (unabhängig von State-Pushes)
@@ -143,6 +149,7 @@ class CompanionApp(App):
 
         overlay = self.query_one("#overlay", Static)
         stack = self.query_one("#stack", Vertical)
+        usage = self.query_one("#usage", Static)
 
         if state.in_prompt() and state.prompt:
             tool = state.prompt.get("tool", "")
@@ -155,9 +162,24 @@ class CompanionApp(App):
                 f"[bold]\\[Y] {t('yes')}     \\[N] {t('no')}[/]"
             )
             overlay.add_class("active")
+            usage.remove_class("active")
             stack.display = False
+        elif self._usage:
+            overlay.remove_class("active")
+            stack.display = False
+            root.styles.border = ("round", border_color(state.hud))
+            # Echte Widget-Groesse: der #root-Rahmen und die gedockten Zeilen
+            # (Namensschild, Fusszeile) gehen sonst als Ueberhang ab und die
+            # Trennlinie wrappt. content_size ist vor dem ersten Layout 0.
+            box = usage.content_size
+            w = box.width or (self.size.width - 4)
+            h = box.height or (self.size.height - 4)
+            usage.update(usage_art(state.hud, None, max(40, w),
+                                   max(10, h), self._frame))
+            usage.add_class("active")
         else:
             overlay.remove_class("active")
+            usage.remove_class("active")
             stack.display = True
             self.query_one("#face", Static).update(f"[{color}]{self._animated_face(st, m)}[/]")
             self.query_one("#word", Static).update(f"[bold {color}]{big_word(word_for(st))}[/]")
@@ -182,6 +204,13 @@ class CompanionApp(App):
     def action_deny(self) -> None:
         if self._state and self._state.in_prompt():
             self._on_decision("deny")
+
+    def action_toggle_usage(self) -> None:
+        """Usage-Vollbild ein/aus. Waehrend einer Freigabe wirkungslos —
+        das Overlay hat Vorrang und wuerde den Screen ohnehin ueberdecken."""
+        self._usage = not self._usage
+        if self._state is not None:
+            self._repaint()
 
     def action_mute(self) -> None:
         if self._on_mute:
