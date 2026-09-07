@@ -104,12 +104,19 @@ class Bridge:
 
 # ---- Daemon-Außenschale: Unix-Socket-Server + BLE-Verdrahtung (Task 1.2) ----
 import json, logging, os
+from logging.handlers import RotatingFileHandler
 from pathlib import Path
 from .ble_central import BleCentral
 
 APPROVE_TIMEOUT = 100.0
-SOCK = Path(os.path.expanduser("~/Documents/web/uconsole-companion-bridge/.run/bridge.sock"))
-logging.basicConfig(filename="bridge.log", level=logging.INFO, format="%(asctime)s %(message)s")
+SOCK = Path(os.path.expanduser("~/opt/uconsole-companion-bridge/.run/bridge.sock"))
+# Rotierend: das Log lief ungebremst auf 11,8 MB, ~99 % davon die harmlose
+# "handler error: Connection lost"-Zeile aus dem Socket-Handler. Das Rauschen ist
+# gutartig, macht die Datei aber als Diagnosewerkzeug unbrauchbar — ein zwei Tage
+# altes "BLE connected" findet darin niemand mehr.
+_handler = RotatingFileHandler("bridge.log", maxBytes=2_000_000, backupCount=3)
+_handler.setFormatter(logging.Formatter("%(asctime)s %(message)s"))
+logging.basicConfig(level=logging.INFO, handlers=[_handler])
 log = logging.getLogger("bridge")
 
 
