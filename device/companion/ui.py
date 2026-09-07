@@ -7,12 +7,14 @@ from typing import Callable, Optional
 from textual.app import App, ComposeResult
 from textual.widgets import Static
 from textual.containers import Vertical, Container
+from rich.markup import escape
 
 from .mood import mood_for, face_box, CLOSED_EYES
-from .i18n import t, word_for
+from .i18n import t, word_for, hints
 from .state import AppState
 from .hud import hud_line
 from .usage_screen import usage_art, border_color
+from .usage_cards import cards_art, border_color as cards_border
 
 try:
     from pyfiglet import Figlet
@@ -72,6 +74,7 @@ class CompanionApp(App):
         ("n", "deny", "ablehnen"),
         ("escape", "deny", "ablehnen"),
         ("u", "toggle_usage", "usage"),
+        ("s", "toggle_synth", "synthwave"),
         ("m", "mute", "stumm"),
         ("q", "quit", "beenden"),
     ]
@@ -84,7 +87,7 @@ class CompanionApp(App):
         self._state: Optional[AppState] = None
         self._muted = False
         self._frame = 0
-        self._usage = False
+        self._screen: str | None = None
 
     def compose(self) -> ComposeResult:
         with Container(id="root"):
@@ -164,18 +167,21 @@ class CompanionApp(App):
             overlay.add_class("active")
             usage.remove_class("active")
             stack.display = False
-        elif self._usage:
+        elif self._screen:
             overlay.remove_class("active")
             stack.display = False
-            root.styles.border = ("round", border_color(state.hud))
             # Echte Widget-Groesse: der #root-Rahmen und die gedockten Zeilen
             # (Namensschild, Fusszeile) gehen sonst als Ueberhang ab und die
             # Trennlinie wrappt. content_size ist vor dem ersten Layout 0.
             box = usage.content_size
-            w = box.width or (self.size.width - 4)
-            h = box.height or (self.size.height - 4)
-            usage.update(usage_art(state.hud, None, max(40, w),
-                                   max(10, h), self._frame))
+            w = max(40, box.width or (self.size.width - 4))
+            h = max(10, box.height or (self.size.height - 4))
+            if self._screen == "cards":
+                root.styles.border = ("round", cards_border(state.hud))
+                usage.update(cards_art(state.hud, None, w, h, self._frame))
+            else:
+                root.styles.border = ("round", border_color(state.hud))
+                usage.update(usage_art(state.hud, None, w, h, self._frame))
             usage.add_class("active")
         else:
             overlay.remove_class("active")
@@ -190,8 +196,11 @@ class CompanionApp(App):
 
         conn = state.connection_state(now)
         conn_txt = f"○ {t('disc')}" if conn == "disconnected" else f"● {t('connected')}"
-        mute_txt = f"✕ {t('muted')}" if getattr(self, "_muted", False) else f"♪ {t('sound_on')}"
-        self.query_one("#foot", Static).update(f"{conn_txt}     {mute_txt}")
+        keys = hints(self._screen, state.in_prompt(), getattr(self, "_muted", False))
+        # escape(): Rich wuerde [u]/[s] sonst als underline/strikethrough lesen
+        # und die Tastenkuerzel verschlucken (statt sie anzuzeigen).
+        self.query_one("#foot", Static).update(
+            f"{conn_txt}     [#6b6b6b]{escape(keys)}[/]")
 
     def render_from_state(self, state: AppState, now: float) -> None:
         self._state = state
@@ -205,12 +214,18 @@ class CompanionApp(App):
         if self._state and self._state.in_prompt():
             self._on_decision("deny")
 
-    def action_toggle_usage(self) -> None:
-        """Usage-Vollbild ein/aus. Waehrend einer Freigabe wirkungslos —
-        das Overlay hat Vorrang und wuerde den Screen ohnehin ueberdecken."""
-        self._usage = not self._usage
+    def _toggle(self, name: str) -> None:
+        """Screen ein/aus; ein anderer offener Screen wird ersetzt. Waehrend einer
+        Freigabe wirkungslos — das Overlay hat Vorrang und ueberdeckt ohnehin."""
+        self._screen = None if self._screen == name else name
         if self._state is not None:
             self._repaint()
+
+    def action_toggle_usage(self) -> None:
+        self._toggle("cards")
+
+    def action_toggle_synth(self) -> None:
+        self._toggle("synth")
 
     def action_mute(self) -> None:
         if self._on_mute:

@@ -15,6 +15,9 @@ _STRINGS = {
         "sound_on": "sound on", "muted": "muted",
         # Approval-Overlay
         "may_i": "may i?", "yes": "yes", "no": "no",
+        # Tastenkuerzel-Leiste
+        "k_usage": "usage", "k_synth": "synthwave", "k_back": "back",
+        "k_mute": "mute", "k_unmute": "sound", "k_quit": "quit",
     },
     "de": {
         "idle": "schläft", "thinking": "denke nach", "running": "arbeite",
@@ -23,6 +26,8 @@ _STRINGS = {
         "connected": "verbunden", "disc": "getrennt",
         "sound_on": "Ton an", "muted": "stumm",
         "may_i": "darf ich?", "yes": "klar", "no": "nö",
+        "k_usage": "usage", "k_synth": "synthwave", "k_back": "zurück",
+        "k_mute": "stumm", "k_unmute": "Ton an", "k_quit": "beenden",
     },
 }
 
@@ -42,3 +47,22 @@ def t(key: str) -> str:
 def word_for(state: str) -> str:
     """Lokalisiertes Status-Wort für einen Mood-State (unbekannt → Fallback)."""
     return t(state) if state in _MOOD_STATES else t("_fallback")
+
+
+def hints(screen: str | None = None, in_prompt: bool = False,
+          muted: bool = False) -> str:
+    """Tastenkuerzel-Leiste für die Fußzeile, als Klartext (Farbe macht die UI).
+
+    Kontextabhängig: während einer Freigabe zählen nur y/n — die Screen-Tasten
+    sind dort wirkungslos (das Overlay hat Vorrang) und würden nur in die Irre
+    führen. Ist ein Screen offen, schließt dieselbe Taste ihn wieder."""
+    if in_prompt:
+        pairs = [("y", t("yes")), ("n", t("no"))]
+    else:
+        pairs = [
+            ("u", t("k_back") if screen == "cards" else t("k_usage")),
+            ("s", t("k_back") if screen == "synth" else t("k_synth")),
+            ("m", t("k_unmute") if muted else t("k_mute")),
+            ("q", t("k_quit")),
+        ]
+    return "   ".join(f"[{k}] {label}" for k, label in pairs)
