@@ -44,6 +44,8 @@ def extract_hud(stdin_obj: dict, cache_obj: dict | None) -> dict:
             hud["usage_7d"] = round(data["sevenDay"])
         if data.get("fiveHourResetAt"):
             hud["reset_5h_iso"] = data["fiveHourResetAt"]
+        if data.get("sevenDayResetAt"):
+            hud["reset_7d_iso"] = data["sevenDayResetAt"]
         if data.get("planName"):
             hud["plan"] = data["planName"]
     return hud
