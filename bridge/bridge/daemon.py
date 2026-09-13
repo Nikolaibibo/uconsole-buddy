@@ -103,13 +103,12 @@ class Bridge:
 
 
 # ---- Daemon-Außenschale: Unix-Socket-Server + BLE-Verdrahtung (Task 1.2) ----
-import json, logging, os
+import json, logging
 from logging.handlers import RotatingFileHandler
-from pathlib import Path
-from .ble_central import BleCentral
+from .endpoint import control_endpoint
+from .transport import build_transport
 
 APPROVE_TIMEOUT = 100.0
-SOCK = Path(os.path.expanduser("~/opt/uconsole-companion-bridge/.run/bridge.sock"))
 # Rotierend: das Log lief ungebremst auf 11,8 MB, ~99 % davon die harmlose
 # "handler error: Connection lost"-Zeile aus dem Socket-Handler. Das Rauschen ist
 # gutartig, macht die Datei aber als Diagnosewerkzeug unbrauchbar — ein zwei Tage
@@ -150,14 +149,18 @@ def _make_handler(bridge: "Bridge"):
     return handle
 
 
+async def start_control_server(bridge: "Bridge", addr=None):
+    """Control-Kanal fuer die Hooks. Getrennt von _serve(), damit ein Test ihn
+    auf Port 0 hochfahren kann, ohne serve_forever() zu betreten."""
+    host, port = addr if addr is not None else control_endpoint()
+    return await asyncio.start_server(_make_handler(bridge), host, port)
+
+
 async def _serve(bridge: "Bridge"):
-    SOCK.parent.mkdir(parents=True, exist_ok=True)
-    if SOCK.exists():
-        SOCK.unlink()
-    server = await asyncio.start_unix_server(_make_handler(bridge), path=str(SOCK))
-    os.chmod(SOCK, 0o600)
-    log.info("socket listening at %s", SOCK)
-    print(f"socket listening at {SOCK}")
+    server = await start_control_server(bridge)
+    host, port = server.sockets[0].getsockname()[:2]
+    log.info("control channel listening at %s:%s", host, port)
+    print(f"control channel listening at {host}:{port}")
     async with server:
         await server.serve_forever()
 
@@ -169,28 +172,29 @@ async def _main():
     bridge_ref: dict = {}
 
     def on_line(line: str):
-        log.info("BLE< %s", line)
+        log.info("RX< %s", line)
         if "bridge" in bridge_ref:
             bridge_ref["bridge"].on_ble_line(line)
 
     def on_disconnect():
-        log.info("BLE disconnected — failing pending approvals")
+        log.info("link down — failing pending approvals")
         if "bridge" in bridge_ref:
             bridge_ref["bridge"].fail_pending()
 
-    ble = BleCentral(on_line, on_disconnect=on_disconnect)
-    print("verbinde mit uConsole (NUS) ...")
+    link = build_transport(on_line, on_disconnect=on_disconnect)
+    kind = type(link).__name__
+    print(f"verbinde mit uConsole ({kind}) ...")
     while True:
         try:
-            await ble.connect()
+            await link.connect()
             break
         except Exception as e:
             log.info("initial connect failed: %s — retry in 5s", e)
             print(f"connect fehlgeschlagen ({e}); retry in 5s ...")
             await asyncio.sleep(5)
-    log.info("BLE connected to uConsole")
-    print("BLE verbunden.")
-    bridge = Bridge(lambda s: ble.send_line(s))
+    log.info("connected to uConsole via %s", kind)
+    print(f"verbunden ({kind}).")
+    bridge = Bridge(lambda s: link.send_line(s))
     bridge_ref["bridge"] = bridge
     await _serve(bridge)
 
