@@ -122,7 +122,11 @@ class TcpCentral:
         if self._writer is None or not self._connected:
             return  # nicht verbunden — Snapshot verwerfen statt crashen
         try:
-            await self._send_raw(line)
+            # BleCentral haengt nichts an: die Bridge liefert die Zeile fertig.
+            # Blind einen Umbruch anzuhaengen erzeugt beim Geraet nach jedem
+            # Snapshot eine Leerzeile (live gesehen 13.09.2026). Nur ergaenzen,
+            # was fehlt -- so vertraegt der Transport beide Aufrufformen.
+            await self._send_raw(line[:-1] if line.endswith('\n') else line)
         except Exception as e:
             # Ein toter Link scheitert oft beim Senden, bevor die Lese-Schleife
             # das EOF sieht. Selbst als Abbruch behandeln statt zu warten.

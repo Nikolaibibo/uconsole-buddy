@@ -241,3 +241,26 @@ def test_intentional_disconnect_does_not_reconnect():
         await dev.stop()
 
     run(scenario())
+
+
+def test_send_line_does_not_double_the_newline():
+    """`BleCentral.send_line` hängt kein \n an — die Bridge liefert die Zeile
+    fertig. Wer hier eins anhängt, erzeugt beim Gerät nach jedem Snapshot eine
+    Leerzeile (live gesehen am 13.09.). Harmlos, aber der Vertrag ist ein anderer.
+    """
+    dev = FakeDevice()
+
+    async def scenario():
+        port = await dev.start()
+        central = TcpCentral(lambda _line: None, host="127.0.0.1", port=port,
+                             secret="x", probe_timeout=2.0)
+        await central.connect()
+        await central.send_line('{"type": "snapshot"}\n')   # so kommt es von der Bridge
+        await asyncio.sleep(0.05)
+        await central.disconnect()
+        await dev.stop()
+
+    run(scenario())
+
+    after_probe = dev.lines[2:]   # [0] auth, [1] probe
+    assert after_probe == ['{"type": "snapshot"}'], f"Leerzeile erzeugt: {after_probe}"
