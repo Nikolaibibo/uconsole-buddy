@@ -103,13 +103,14 @@ class Bridge:
 
 
 # ---- Daemon-Außenschale: Unix-Socket-Server + BLE-Verdrahtung (Task 1.2) ----
-import json, logging, os
+import json, logging, os, sys
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
 from .ble_central import BleCentral
 
 APPROVE_TIMEOUT = 100.0
 SOCK = Path(os.path.expanduser("~/opt/uconsole-companion-bridge/.run/bridge.sock"))
+TCP_ADDR = ("127.0.0.1", int(os.environ.get("GERALD_PORT", "47821")))  # Windows only
 # Rotierend: das Log lief ungebremst auf 11,8 MB, ~99 % davon die harmlose
 # "handler error: Connection lost"-Zeile aus dem Socket-Handler. Das Rauschen ist
 # gutartig, macht die Datei aber als Diagnosewerkzeug unbrauchbar — ein zwei Tage
@@ -151,6 +152,14 @@ def _make_handler(bridge: "Bridge"):
 
 
 async def _serve(bridge: "Bridge"):
+    if sys.platform == "win32":
+        # No asyncio unix-socket server on Windows; loopback TCP only, never 0.0.0.0.
+        server = await asyncio.start_server(_make_handler(bridge), *TCP_ADDR)
+        log.info("listening on %s:%d", *TCP_ADDR)
+        print(f"listening on {TCP_ADDR[0]}:{TCP_ADDR[1]}")
+        async with server:
+            await server.serve_forever()
+        return
     SOCK.parent.mkdir(parents=True, exist_ok=True)
     if SOCK.exists():
         SOCK.unlink()

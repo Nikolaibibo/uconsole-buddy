@@ -1,12 +1,18 @@
 #!/usr/bin/env python3
 import json, os, sys
 from datetime import datetime
-from _send import send_status
+from _send import send_status, FULL_FEED
 
 MAXLEN = 60
 
 
-def feed_line(tool, tool_input, hhmm):
+def feed_line(tool, tool_input, hhmm, full=None):
+    if full is None:
+        full = FULL_FEED
+    if not full:
+        # Category only: "mcp__hubspot__search" would already name the system in use.
+        category = "MCP" if tool.startswith("mcp__") else tool
+        return f"{hhmm} {category}"[:MAXLEN]
     ti = tool_input or {}
     if tool == "Bash":
         hint = ti.get("command", "")

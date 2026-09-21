@@ -1,6 +1,8 @@
 """BLE-Central (bleak): verbindet sich mit dem uConsole-Peripheral, NUS-Serial."""
 import asyncio
 import logging
+import os
+import sys
 from typing import Callable
 from bleak import BleakScanner, BleakClient
 from .framing import LineReassembler, chunk_for_mtu
@@ -15,6 +17,23 @@ HEARTBEAT_S = 60.0    # Abstand der Lebendkontrolle auf einer stehenden Strecke
 PROBE = b'{"cmd": "status"}\n'  # das Geraet antwortet darauf mit {"ack":"status"}
 
 log = logging.getLogger("bridge.ble")
+
+# Onboard controller (hci0) of the uConsole. Matching on the service UUID alone would let any
+# peripheral that advertises NUS impersonate the device. macOS/CoreBluetooth hides MAC
+# addresses behind per-host UUIDs, so pinning only applies on Windows/Linux.
+DEVICE_ADDRESS = "2C:CF:67:FE:1E:1D"
+
+
+def pinned_address() -> str | None:
+    if sys.platform == "darwin":
+        return None
+    return os.environ.get("GERALD_ADDRESS", DEVICE_ADDRESS).upper() or None
+
+
+def matches_device(address: str, service_uuids, pinned: str | None) -> bool:
+    if NUS_SERVICE.lower() not in [u.lower() for u in (service_uuids or [])]:
+        return False
+    return pinned is None or (address or "").upper() == pinned
 
 
 class BleCentral:
@@ -49,8 +68,9 @@ class BleCentral:
 
     @staticmethod
     async def _find_device():
+        pinned = pinned_address()
         return await BleakScanner.find_device_by_filter(
-            lambda d, ad: NUS_SERVICE.lower() in [u.lower() for u in (ad.service_uuids or [])],
+            lambda d, ad: matches_device(d.address, ad.service_uuids, pinned),
             timeout=15.0)
 
     async def _probe(self) -> bool:

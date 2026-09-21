@@ -6,14 +6,23 @@ ptu = importlib.util.module_from_spec(spec); spec.loader.exec_module(ptu)
 import _send
 
 def test_feed_line_bash():
-    assert ptu.feed_line("Bash", {"command": "npm test"}, "14:23") == "14:23 Bash: npm test"
+    assert ptu.feed_line("Bash", {"command": "npm test"}, "14:23", full=True) == "14:23 Bash: npm test"
 
 def test_feed_line_edit_uses_file_path():
-    assert ptu.feed_line("Edit", {"file_path": "/a/b/ui.py"}, "09:01") == "09:01 Edit: ui.py"
+    assert ptu.feed_line("Edit", {"file_path": "/a/b/ui.py"}, "09:01", full=True) == "09:01 Edit: ui.py"
 
 def test_feed_line_truncates():
-    line = ptu.feed_line("Bash", {"command": "x" * 200}, "00:00")
+    line = ptu.feed_line("Bash", {"command": "x" * 200}, "00:00", full=True)
     assert len(line) <= 60
+
+def test_feed_line_redacted_drops_command():
+    assert ptu.feed_line("Bash", {"command": "curl secret"}, "14:23", full=False) == "14:23 Bash"
+
+def test_feed_line_redacted_hides_file_name():
+    assert ptu.feed_line("Edit", {"file_path": "/a/mandant.md"}, "09:01", full=False) == "09:01 Edit"
+
+def test_feed_line_redacted_hides_mcp_server():
+    assert ptu.feed_line("mcp__hubspot__search", {"q": "x"}, "09:01", full=False) == "09:01 MCP"
 
 def test_payload_omits_msg_when_not_passed():
     p = _send.build_status_payload(state="running", entry="14:23 Bash: ls")
