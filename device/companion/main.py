@@ -1,17 +1,21 @@
 # companion/main.py
 import asyncio
 import logging
+from logging.handlers import RotatingFileHandler
 import os
 import time
 
-from .ble_nus import NusPeripheral
+from .transport import build_transport
 from .notify import NotifyDecider, play
 from .state import AppState
 from .ui import CompanionApp
+from .logfmt import summarize_rx
 from .protocol import parse_message, build_permission, build_ack, build_status_ack
 
-logging.basicConfig(filename="companion.log", level=logging.INFO,
-                    format="%(asctime)s %(message)s")
+# Rotated: unbounded, the file reached 1.4 MB in a week, almost all of it snapshot payloads.
+_handler = RotatingFileHandler("companion.log", maxBytes=1_000_000, backupCount=2)
+_handler.setFormatter(logging.Formatter("%(asctime)s %(message)s"))
+logging.basicConfig(level=logging.INFO, handlers=[_handler])
 log = logging.getLogger("companion")
 
 BOOT = time.monotonic()
@@ -20,7 +24,7 @@ BOOT = time.monotonic()
 class Companion:
     def __init__(self) -> None:
         self.state = AppState()
-        self.ble = NusPeripheral("Claude-uConsole", self._on_line)
+        self.link = build_transport(self._on_line)
         self.notifier = NotifyDecider()
         self._assets = os.path.join(os.path.dirname(__file__), "assets")
         self.app = CompanionApp(on_decision=self._on_decision, on_mute=self._toggle_mute)
@@ -28,7 +32,7 @@ class Companion:
 
     # ---- RX ----
     def _on_line(self, line: str) -> None:
-        log.info("RX %s", line)
+        log.info("RX %s", summarize_rx(line))
         msg = parse_message(line)
         if msg is None:
             return
@@ -80,7 +84,7 @@ class Companion:
     async def _tx_loop(self) -> None:
         while True:
             line = await self._send_q.get()
-            await self.ble.send_line(line)
+            await self.link.send_line(line)
             log.info("TX %s", line.strip())
 
     async def _tick_loop(self) -> None:
@@ -93,8 +97,8 @@ class Companion:
             self._rerender()
 
     async def run(self) -> None:
-        await self.ble.start()
-        log.info("advertising as Claude-uConsole")
+        await self.link.start()
+        log.info("transport up: %s", type(self.link).__name__)
         asyncio.create_task(self._tx_loop())
         asyncio.create_task(self._tick_loop())
         await self.app.run_async()
